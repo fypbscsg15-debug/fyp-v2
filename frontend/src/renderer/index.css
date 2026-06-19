@@ -1,0 +1,168 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Nastaliq+Urdu:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* SPSS - Smart Pharmacist Support System
+   Clinical, trustworthy design system. All colors HSL.
+   Primary brand: #2C7DA0 -> hsl(199 57% 40%)
+*/
+
+@layer base {
+  :root {
+    --background: 210 33% 98%;
+    --foreground: 215 28% 17%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 28% 17%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 28% 17%;
+
+    /* SPSS Primary Blue #2C7DA0 */
+    --primary: 199 57% 40%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 199 65% 55%;
+    --primary-soft: 199 60% 95%;
+
+    --secondary: 210 30% 94%;
+    --secondary-foreground: 215 28% 17%;
+
+    --muted: 210 25% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 199 60% 95%;
+    --accent-foreground: 199 57% 30%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Severity tokens */
+    --severity-high: 0 72% 51%;
+    --severity-high-bg: 0 80% 97%;
+    --severity-high-border: 0 70% 85%;
+
+    --severity-medium: 25 95% 53%;
+    --severity-medium-bg: 30 100% 97%;
+    --severity-medium-border: 30 90% 85%;
+
+    --severity-low: 45 93% 47%;
+    --severity-low-bg: 48 100% 96%;
+    --severity-low-border: 48 80% 80%;
+
+    --success: 152 60% 36%;
+    --success-foreground: 0 0% 100%;
+    --success-soft: 152 60% 95%;
+
+    --warning: 35 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --warning-soft: 35 92% 95%;
+
+    --info: 199 80% 50%;
+    --info-soft: 199 80% 95%;
+
+    --border: 215 20% 90%;
+    --input: 215 20% 90%;
+    --ring: 199 57% 40%;
+
+    --radius: 0.625rem;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(199 57% 40%), hsl(199 65% 55%));
+    --gradient-subtle: linear-gradient(180deg, hsl(210 33% 99%), hsl(210 30% 96%));
+
+    /* Shadows */
+    --shadow-card: 0 1px 3px 0 hsl(215 28% 17% / 0.04), 0 1px 2px 0 hsl(215 28% 17% / 0.06);
+    --shadow-elevated: 0 10px 25px -5px hsl(215 28% 17% / 0.08), 0 8px 10px -6px hsl(215 28% 17% / 0.05);
+    --shadow-primary: 0 8px 20px -8px hsl(199 57% 40% / 0.4);
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 215 25% 27%;
+    --sidebar-primary: 199 57% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 199 60% 95%;
+    --sidebar-accent-foreground: 199 57% 30%;
+    --sidebar-border: 215 20% 92%;
+    --sidebar-ring: 199 57% 40%;
+
+    --transition-base: all 0.2s ease;
+  }
+
+  .dark {
+    --background: 215 32% 9%;
+    --foreground: 210 33% 96%;
+    --card: 215 30% 12%;
+    --card-foreground: 210 33% 96%;
+    --popover: 215 30% 12%;
+    --popover-foreground: 210 33% 96%;
+    --primary: 199 65% 55%;
+    --primary-foreground: 215 32% 9%;
+    --primary-glow: 199 70% 65%;
+    --primary-soft: 199 50% 18%;
+    --secondary: 215 25% 18%;
+    --secondary-foreground: 210 33% 96%;
+    --muted: 215 25% 18%;
+    --muted-foreground: 215 16% 65%;
+    --accent: 199 50% 20%;
+    --accent-foreground: 199 80% 85%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 25% 20%;
+    --input: 215 25% 20%;
+    --ring: 199 65% 55%;
+    --sidebar-background: 215 30% 11%;
+    --sidebar-foreground: 210 33% 96%;
+    --sidebar-primary: 199 65% 55%;
+    --sidebar-primary-foreground: 215 32% 9%;
+    --sidebar-accent: 215 25% 18%;
+    --sidebar-accent-foreground: 199 80% 85%;
+    --sidebar-border: 215 25% 18%;
+    --sidebar-ring: 199 65% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  [dir="rtl"] .urdu,
+  .urdu {
+    font-family: 'Noto Nastaliq Urdu', 'Inter', serif;
+    line-height: 2.2;
+  }
+
+  h1, h2, h3, h4 {
+    @apply tracking-tight;
+  }
+}
+
+@layer components {
+  .card-elevated {
+    @apply bg-card rounded-xl border;
+    box-shadow: var(--shadow-card);
+  }
+
+  .stat-card {
+    @apply card-elevated p-5 transition-all hover:shadow-md;
+  }
+}
+
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+  .no-print { display: none !important; }
+}

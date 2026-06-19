@@ -1,0 +1,184 @@
+import re
+import requests
+from typing import Optional, List, Dict, Any
+from sqlalchemy.orm import Session
+from ..models.drug import Drug
+
+def clean_text(text_list) -> str:
+    if not text_list:
+        return ""
+    if isinstance(text_list, str):
+        text_list = [text_list]
+    text = " ".join(text_list)
+    # Remove extra spaces/newlines
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+def get_fda_contraindications(drug_name: str) -> Optional[str]:
+    # Clean drug name to remove dosage details like "500mg" or "500 mg" or "tablet"
+    cleaned_name = re.sub(r"\d+\s*(mg|ml|mcg|g|iu|units?|tabs?|caps?)\b", "", drug_name, flags=re.IGNORECASE)
+    cleaned_name = re.sub(r"\b(tablet|capsule|injection|syrup|suspension|drops?|cream|gel|ointment)\b", "", cleaned_name, flags=re.IGNORECASE)
+    cleaned_name = cleaned_name.strip()
+    if not cleaned_name:
+        cleaned_name = drug_name
+
+    # Query FDA API searching both brand_name and generic_name
+    url = f"https://api.fda.gov/drug/label.json?search=(openfda.brand_name:\"{cleaned_name}\"+OR+openfda.generic_name:\"{cleaned_name}\")&limit=1"
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            if "results" in data and len(data["results"]) > 0:
+                result = data["results"][0]
+                contraindications = result.get("contraindications", [])
+                if contraindications:
+                    return clean_text(contraindications)
+        return None
+    except Exception as e:
+        print(f"Error querying openFDA for {cleaned_name}: {e}")
+        return None
+
+def check_contraindications(
+    medicines: List[str],
+    patient_age: Optional[str] = None,
+    patient_gender: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    alerts = []
+    
+    # Parse age
+    age_val = None
+    if patient_age:
+        try:
+            age_val = int(patient_age)
+        except ValueError:
+            pass
+
+    for i, med in enumerate(medicines):
+        if not med.strip():
+            continue
+        contra_text = get_fda_contraindications(med)
+        if not contra_text:
+            continue
+        
+        # 1. General Contraindication alert
+        desc_truncated = contra_text
+        if len(desc_truncated) > 300:
+            desc_truncated = desc_truncated[:300] + "..."
+            
+        alerts.append({
+            "id": f"contra_gen_{i}_{med.lower().replace(' ', '_')}",
+            "severity": "medium",
+            "category": "contraindication",
+            "title": f"Contraindications for {med}",
+            "description": desc_truncated,
+            "reference": "FDA Label — Contraindications Section"
+        })
+        
+        # 2. Gender/Pregnancy contraindications
+        if patient_gender and patient_gender.lower() == "female":
+            preg_keywords = ["pregnancy", "pregnant", "lactation", "breastfeed", "breast-feeding", "nursing mother", "teratogenic", "fetus", "fetal"]
+            if any(k in contra_text.lower() for k in preg_keywords):
+                alerts.append({
+                    "id": f"contra_preg_{i}_{med.lower().replace(' ', '_')}",
+                    "severity": "high",
+                    "category": "contraindication",
+                    "title": f"Pregnancy Warning: {med}",
+                    "description": f"Safety concern for female patient. Pregnancy/lactation risks associated with {med}. FDA: {desc_truncated}",
+                    "reference": "FDA Label — Pregnancy and Lactation Warnings"
+                })
+
+        # 3. Pediatric contraindications
+        if age_val is not None and age_val < 18:
+            ped_keywords = ["pediatric", "children", "child", "infant", "neonate", "adolescent"]
+            if any(k in contra_text.lower() for k in ped_keywords):
+                alerts.append({
+                    "id": f"contra_ped_{i}_{med.lower().replace(' ', '_')}",
+                    "severity": "high",
+                    "category": "contraindication",
+                    "title": f"Pediatric Warning: {med}",
+                    "description": f"Safety concern for pediatric patient (age {age_val}). Contraindications or pediatric warnings associated with {med}. FDA: {desc_truncated}",
+                    "reference": "FDA Label — Pediatric Use"
+                })
+
+        # 4. Geriatric contraindications
+        if age_val is not None and age_val >= 65:
+            ger_keywords = ["geriatric", "elderly", "older patients", "older adults"]
+            if any(k in contra_text.lower() for k in ger_keywords):
+                alerts.append({
+                    "id": f"contra_ger_{i}_{med.lower().replace(' ', '_')}",
+                    "severity": "medium",
+                    "category": "contraindication",
+                    "title": f"Geriatric Warning: {med}",
+                    "description": f"Safety concern for elderly patient (age {age_val}). Precautions or warnings associated with {med}. FDA: {desc_truncated}",
+                    "reference": "FDA Label — Geriatric Use"
+                })
+                
+    return alerts
+
+def parse_dosage_value(dosage_str: str) -> Optional[tuple[float, str]]:
+    if not dosage_str:
+        return None
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(mg|ml|mcg|g|iu|units?|tabs?|caps?|puffs?)", dosage_str, re.IGNORECASE)
+    if m:
+        val = float(m.group(1))
+        unit = m.group(2).lower()
+        if unit.startswith("tab"):
+            unit = "tab"
+        elif unit.startswith("cap"):
+            unit = "cap"
+        elif unit.startswith("unit"):
+            unit = "unit"
+        return val, unit
+    return None
+
+def check_dosage_errors(
+    medicines: List[str],
+    dosages: List[str],
+    db: Session
+) -> List[Dict[str, Any]]:
+    alerts = []
+    if not dosages or len(dosages) != len(medicines):
+        return []
+
+    for i, (med, prescribed_dose) in enumerate(zip(medicines, dosages)):
+        if not med.strip() or not prescribed_dose or not prescribed_dose.strip():
+            continue
+
+        # Look up drug in database (case insensitive search)
+        drug_rec = db.query(Drug).filter(
+            (Drug.brand_name.ilike(f"%{med}%")) | 
+            (Drug.generic_name.ilike(f"%{med}%"))
+        ).first()
+
+        if not drug_rec:
+            continue
+
+        # Parse standard dosage and prescribed dosage
+        std_parsed = parse_dosage_value(drug_rec.standard_dosage)
+        presc_parsed = parse_dosage_value(prescribed_dose)
+
+        if std_parsed and presc_parsed:
+            std_val, std_unit = std_parsed
+            presc_val, presc_unit = presc_parsed
+
+            # Compare if the units match
+            if std_unit == presc_unit:
+                if presc_val > std_val:
+                    alerts.append({
+                        "id": f"dosage_err_{i}_{med.lower().replace(' ', '_')}",
+                        "severity": "high",
+                        "category": "dosage",
+                        "title": f"Dosage Alert: {med}",
+                        "description": f"Prescribed dosage ({prescribed_dose}) exceeds the standard recommended dosage ({drug_rec.standard_dosage}) for this drug.",
+                        "reference": f"SPSS Clinical Guideline Database — Standard: {drug_rec.standard_dosage}"
+                    })
+                elif presc_val < std_val * 0.1: # Check for subtherapeutic dosage (10% of standard)
+                    alerts.append({
+                        "id": f"dosage_warn_{i}_{med.lower().replace(' ', '_')}",
+                        "severity": "medium",
+                        "category": "dosage",
+                        "title": f"Subtherapeutic Dosage Warning: {med}",
+                        "description": f"Prescribed dosage ({prescribed_dose}) is significantly below the standard recommended dosage ({drug_rec.standard_dosage}).",
+                        "reference": f"SPSS Clinical Guideline Database — Standard: {drug_rec.standard_dosage}"
+                    })
+    return alerts
