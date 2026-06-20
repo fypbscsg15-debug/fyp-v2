@@ -11,7 +11,7 @@ from ..schemas.schemas import InteractionCheckResponse
 from ..utils.auth import get_current_user
 from ..utils.drug_interaction import check_drug_interactions
 from ..utils.ocr import run_ocr
-from ..utils.safety import check_contraindications, check_dosage_errors
+from ..utils.safety import check_contraindications, check_dosage_errors, check_duplicate_medicines
 
 router = APIRouter(prefix="/prescriptions", tags=["prescriptions"])
 
@@ -92,7 +92,16 @@ def verify_prescription(
         print(f"Dosage check failed: {e}")
         dosage_alerts = []
 
-    alerts = interaction_alerts + contraindication_alerts + dosage_alerts
+    try:
+        duplicate_alerts = check_duplicate_medicines(
+            cleaned_medicines,
+            db
+        )
+    except Exception as e:
+        print(f"Duplicate check failed: {e}")
+        duplicate_alerts = []
+
+    alerts = interaction_alerts + contraindication_alerts + dosage_alerts + duplicate_alerts
     total_pairs = len(cleaned_medicines) * (len(cleaned_medicines) - 1) // 2
     has_high    = any(a["severity"] == "high" for a in alerts)
 

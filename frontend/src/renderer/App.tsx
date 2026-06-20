@@ -20,6 +20,7 @@ import Reports from "./pages/Reports";
 import AuditLog from "./pages/AuditLog";
 import Settings from "./pages/Settings";
 import Confirmation from "./pages/Confirmation";
+import DosageChecker from "./pages/DosageChecker";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -52,6 +53,7 @@ const App = () => (
               <Route path="/audit-logs" element={<Protected adminOnly><AuditLog /></Protected>} />
               <Route path="/settings" element={<Protected><Settings /></Protected>} />
               <Route path="/confirmation/:id" element={<Protected><Confirmation /></Protected>} />
+              <Route path="/dosage-checker" element={<Protected><DosageChecker /></Protected>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

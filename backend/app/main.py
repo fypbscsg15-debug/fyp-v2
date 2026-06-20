@@ -32,6 +32,7 @@ from .routes.prescriptions import router as prescriptions_router
 from .routes.analytics import router as analytics_router
 from .routes.inventory import router as inventory_router
 from .routes.reports import router as reports_router
+from .routes.dosage import router as dosage_router
 from .utils.auth import hash_password
 from .utils.drug_interaction import preload_model
 
@@ -84,6 +85,7 @@ app.include_router(prescriptions_router)
 app.include_router(analytics_router)
 app.include_router(inventory_router)
 app.include_router(reports_router)
+app.include_router(dosage_router)
 
 
 @app.post("/system/seed")

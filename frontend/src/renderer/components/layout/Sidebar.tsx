@@ -2,13 +2,14 @@ import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ScanLine, ShieldCheck, FileText, Package,
-  BarChart3, FileBarChart, History, Settings, Pill, X
+  BarChart3, FileBarChart, History, Settings, Pill, X, Scale
 } from "lucide-react";
 
 const items = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/scan", label: "Scan Prescription", icon: ScanLine },
   { to: "/verify/rx_1023", label: "Verify", icon: ShieldCheck },
+  { to: "/dosage-checker", label: "Dosage Checker", icon: Scale },
   { to: "/instructions/rx_1023", label: "Instructions", icon: FileText },
   { to: "/inventory", label: "Inventory", icon: Package },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },

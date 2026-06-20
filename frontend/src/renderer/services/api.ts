@@ -79,4 +79,6 @@ export const apiEndpoints = {
   auditLogs: (params?: any) => api.get("/audit-logs", { params }),
   startShift: (payload: { staff_name: string; staff_role: string }) => api.post("/auth/shift/start", payload),
   endShift: (shiftId: string) => api.post(`/auth/shift/end/${shiftId}`),
+  checkDosage: (medicine: string, dose: string, age: string, apiKey?: string) =>
+    api.post("/dosage/check", { medicine, dose, age, api_key: apiKey }),
 };
