@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.user import Pharmacist
 from ..models.staff_shift import StaffShift
+from ..models.audit_log import AuditLog
 from ..schemas.schemas import (
     ChangePasswordRequest,
     LoginRequest,
@@ -124,6 +125,16 @@ def start_shift(body: StaffShiftStart, db: Session = Depends(get_db)):
     db.add(shift)
     db.commit()
     db.refresh(shift)
+    
+    # Create AuditLog entry
+    audit = AuditLog(
+        user=body.staff_name,
+        action="Login",
+        details=f"Shift session started. Role: {body.staff_role}"
+    )
+    db.add(audit)
+    db.commit()
+    
     return shift
 
 
@@ -133,6 +144,14 @@ def end_shift(shift_id: str, db: Session = Depends(get_db)):
     if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
     shift.end_time = datetime.now()
+    
+    # Create AuditLog entry
+    audit = AuditLog(
+        user=shift.staff_name,
+        action="Logout",
+        details="Shift session ended."
+    )
+    db.add(audit)
     db.commit()
     db.refresh(shift)
     return shift

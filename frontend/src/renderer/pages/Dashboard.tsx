@@ -28,10 +28,10 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [stats, setStats] = useState({
-    todaysPrescriptions: 24,
-    pendingVerification: 3,
-    errorDetectionRate: 94,
-    lowStockAlerts: 3,
+    todaysPrescriptions: 0,
+    pendingVerification: 0,
+    errorDetectionRate: 100,
+    lowStockAlerts: 0,
   });
 
   useEffect(() => {

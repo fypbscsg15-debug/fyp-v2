@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Printer, Download, Send, CheckCircle2, MessageSquare, Mail, Phone, Smartphone, Pill } from "lucide-react";
 import { mockExtractedPrescription } from "@/services/mockData";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { apiEndpoints } from "@/services/api";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import jsPDF from "jspdf";
@@ -19,17 +20,72 @@ type SendChannel = "sms" | "whatsapp" | "email" | "print";
 const Instructions = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const location = useLocation();
   const { t, lang, setLang } = useLanguage();
   const [sendOpen, setSendOpen] = useState(false);
   const [channel, setChannel] = useState<SendChannel>("sms");
   const [contact, setContact] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [rx, setRx] = useState<any>(null);
 
-  const rx = mockExtractedPrescription;
+  useEffect(() => {
+    const stateData = location.state as any;
+    if (stateData && stateData.patientName && stateData.medications) {
+      setRx({
+        id: id || "rx_ocr",
+        patientName: stateData.patientName,
+        patientAge: stateData.patientAge || "",
+        patientGender: stateData.patientGender || "",
+        medicines: stateData.medications.map((m: any, idx: number) => ({
+          id: m.id || `m_${idx}`,
+          name: m.name,
+          dosage: m.dosage || "",
+          frequency: m.frequency || "",
+          duration: m.duration || ""
+        }))
+      });
+      setLoading(false);
+      return;
+    }
+
+    const fetchPrescription = async () => {
+      try {
+        let res;
+        if (id && id !== "rx_1023" && id !== "rx_ocr") {
+          res = await apiEndpoints.getPrescription(id);
+        } else {
+          res = await apiEndpoints.getLatestPrescription();
+        }
+        
+        if (res.data) {
+          setRx(res.data);
+        } else {
+          setRx(mockExtractedPrescription);
+        }
+      } catch (err) {
+        console.error("Failed to fetch prescription:", err);
+        setRx(mockExtractedPrescription);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPrescription();
+  }, [id, location.state]);
+
+  if (loading || !rx) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <span className="ml-2 text-sm text-muted-foreground">Loading instructions...</span>
+      </div>
+    );
+  }
 
   const englishMessage = `Patient Instructions for ${rx.patientName}
 
 Medications:
-${rx.medicines.map((m, i) => `${i + 1}. ${m.name} ${m.dosage} — ${m.frequency} for ${m.duration}`).join("\n")}
+${rx.medicines.map((m: any, i: number) => `${i + 1}. ${m.name} ${m.dosage} — ${m.frequency} for ${m.duration}`).join("\n")}
 
 Timing: Take with food unless otherwise specified.
 Storage: Store at room temperature, away from direct sunlight.
@@ -39,7 +95,7 @@ Warnings: Contact your pharmacist if you experience adverse effects.`;
   const urduMessage = `${rx.patientName} کے لیے ہدایات
 
 دوائیں:
-${rx.medicines.map((m, i) => `${i + 1}. ${m.name} ${m.dosage} — دن میں ${m.frequency}، ${m.duration}`).join("\n")}
+${rx.medicines.map((m: any, i: number) => `${i + 1}. ${m.name} ${m.dosage} — دن میں ${m.frequency}، ${m.duration}`).join("\n")}
 
 وقت: کھانے کے ساتھ لیں جب تک کہ ہدایت نہ کی جائے۔
 ذخیرہ: کمرے کے درجہ حرارت پر، براہِ راست دھوپ سے دور رکھیں۔

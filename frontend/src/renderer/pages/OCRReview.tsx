@@ -251,11 +251,12 @@ const OCRReview = () => {
     setMeds((p) => [...p, { id: `new_${Date.now()}`, name: "", dosage: "", frequency: "", duration: "" }]);
 
   const removeRow = (idx: number) => setMeds((p) => p.filter((_, i) => i !== idx));
-
   const handleConfirm = async () => {
     const activeMeds = meds.filter((m) => m.name.trim() !== "");
     const drugNames = activeMeds.map((m) => m.name);
     const dosages = activeMeds.map((m) => m.dosage || "");
+    const frequencies = activeMeds.map((m) => m.frequency || "");
+    const durations = activeMeds.map((m) => m.duration || "");
 
     if (drugNames.length < 1) {
       toast.warning("Enter at least 1 medicine name to run safety checks.");
@@ -263,16 +264,39 @@ const OCRReview = () => {
     }
     setVerifying(true);
     try {
-      const res = await apiEndpoints.verifyPrescription(drugNames, name, age, gender, dosages);
+      const res = await apiEndpoints.verifyPrescription(
+        drugNames,
+        name,
+        age,
+        gender,
+        dosages,
+        frequencies,
+        durations
+      );
       toast.success("Safety check complete");
-      navigate("/verify/rx_ocr", { state: { alerts: res.data.alerts, medicines: drugNames } });
+      const rxId = res.data.prescription_id || "rx_ocr";
+      navigate(`/verify/${rxId}`, {
+        state: {
+          alerts: res.data.alerts,
+          medicines: drugNames,
+          patientName: name,
+          patientAge: age,
+          patientGender: gender,
+          medications: activeMeds.map((m) => ({
+            id: m.id,
+            name: m.name,
+            dosage: m.dosage,
+            frequency: m.frequency,
+            duration: m.duration
+          }))
+        }
+      });
     } catch (err: any) {
       toast.error(err.response?.data?.detail || "Verification failed. Is the backend running?");
     } finally {
       setVerifying(false);
     }
   };
-
   return (
     <div className="mx-auto max-w-7xl">
       <PageHeader

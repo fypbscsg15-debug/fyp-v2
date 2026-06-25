@@ -246,6 +246,7 @@ class InteractionAlert(BaseModel):
 
 class InteractionCheckResponse(BaseModel):
     check_id: str
+    prescription_id: Optional[str] = None
     pharmacist_id: str
     medicines: list[str]
     alerts: list[InteractionAlert]

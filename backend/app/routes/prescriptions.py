@@ -7,6 +7,13 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models.interaction_check import InteractionCheck
+from ..models.patient import Patient
+from ..models.prescription import Prescription
+from ..models.prescription_drug import PrescriptionDrug
+from ..models.drug import Drug
+from ..models.alert import Alert
+from ..models.staff_shift import StaffShift
+from ..models.audit_log import AuditLog
 from ..schemas.schemas import InteractionCheckResponse
 from ..utils.auth import get_current_user
 from ..utils.drug_interaction import check_drug_interactions
@@ -21,7 +28,11 @@ ALLOWED_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
 # ── OCR scan ──────────────────────────────────────────────────────────────────
 
 @router.post("/scan")
-async def scan_prescription(file: UploadFile = File(...)):
+async def scan_prescription(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     if file.content_type not in ALLOWED_TYPES:
         raise HTTPException(status_code=400, detail="Only JPEG and PNG images are supported")
 
@@ -34,6 +45,20 @@ async def scan_prescription(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"OCR failed: {str(e)}")
 
+    # Log action to AuditLog
+    shift = db.query(StaffShift).filter(
+        StaffShift.end_time == None
+    ).order_by(StaffShift.start_time.desc()).first()
+    user_name = shift.staff_name if shift else current_user.name
+
+    audit = AuditLog(
+        user=user_name,
+        action="Scanned Prescription",
+        details=f"Scanned prescription image: {file.filename or 'prescription.jpg'}"
+    )
+    db.add(audit)
+    db.commit()
+
     return result
 
 
@@ -42,6 +67,8 @@ async def scan_prescription(file: UploadFile = File(...)):
 class VerifyRequest(BaseModel):
     medicines: list[str]
     dosages: Optional[list[str]] = None
+    frequencies: Optional[list[str]] = None
+    durations: Optional[list[str]] = None
     patient_name: Optional[str] = None
     patient_age: Optional[str] = None
     patient_gender: Optional[str] = None
@@ -105,6 +132,100 @@ def verify_prescription(
     total_pairs = len(cleaned_medicines) * (len(cleaned_medicines) - 1) // 2
     has_high    = any(a["severity"] == "high" for a in alerts)
 
+    # 1. Find or create Patient
+    patient = None
+    if body.patient_name:
+        patient = db.query(Patient).filter(Patient.name.ilike(body.patient_name.strip())).first()
+        if not patient:
+            age_int = None
+            if body.patient_age:
+                try:
+                    age_int = int(body.patient_age)
+                except ValueError:
+                    pass
+            g_val = None
+            if body.patient_gender:
+                g_lower = body.patient_gender.strip().lower()
+                if g_lower in ["male", "female", "other"]:
+                    g_val = g_lower
+            patient = Patient(
+                name=body.patient_name.strip(),
+                age=age_int,
+                gender=g_val
+            )
+            db.add(patient)
+            db.commit()
+            db.refresh(patient)
+
+    if not patient:
+        patient = db.query(Patient).filter(Patient.name == "Anonymous Patient").first()
+        if not patient:
+            patient = Patient(name="Anonymous Patient", age=0, gender="other")
+            db.add(patient)
+            db.commit()
+            db.refresh(patient)
+
+    # 2. Create Prescription
+    rx = Prescription(
+        patient_id=patient.patient_id,
+        pharmacist_id=current_user.pharmacist_id,
+        status="error" if has_high else "verified",
+        ocr_extracted_text=json.dumps(body.medicines),
+        is_emergency=False
+    )
+    db.add(rx)
+    db.commit()
+    db.refresh(rx)
+
+    # 3. Create PrescriptionDrug records
+    if body.dosages and len(body.dosages) == len(body.medicines):
+        dosages_list = body.dosages
+    else:
+        dosages_list = ["" for _ in body.medicines]
+
+    if body.frequencies and len(body.frequencies) == len(body.medicines):
+        frequencies_list = body.frequencies
+    else:
+        frequencies_list = ["" for _ in body.medicines]
+
+    if body.durations and len(body.durations) == len(body.medicines):
+        durations_list = body.durations
+    else:
+        durations_list = ["" for _ in body.medicines]
+
+    for med, dose, freq, dur in zip(body.medicines, dosages_list, frequencies_list, durations_list):
+        if not med or not med.strip():
+            continue
+        drug_rec = db.query(Drug).filter(
+            (Drug.brand_name.ilike(f"%{med.strip()}%")) | 
+            (Drug.generic_name.ilike(f"%{med.strip()}%"))
+        ).first()
+        
+        rx_drug = PrescriptionDrug(
+            prescription_id=rx.prescription_id,
+            drug_id=drug_rec.drug_id if drug_rec else None,
+            drug_name_raw=med.strip(),
+            dosage=dose.strip() if dose else None,
+            frequency=freq.strip() if freq else None,
+            duration=dur.strip() if dur else None
+        )
+        db.add(rx_drug)
+    db.commit()
+
+    # 4. Save Alerts
+    for alert in alerts:
+        db_alert = Alert(
+            prescription_id=rx.prescription_id,
+            alert_type=alert.get("category", "interaction"),
+            severity=alert.get("severity", "medium"),
+            message=alert.get("title", "") + ": " + alert.get("description", ""),
+            acknowledged=False,
+            resolved=False
+        )
+        db.add(db_alert)
+    db.commit()
+
+    # 5. Create InteractionCheck record
     record = InteractionCheck(
         pharmacist_id  = current_user.pharmacist_id,
         medicines_json = json.dumps(body.medicines),
@@ -117,8 +238,24 @@ def verify_prescription(
     db.commit()
     db.refresh(record)
 
+    # Log action to AuditLog
+    shift = db.query(StaffShift).filter(
+        StaffShift.end_time == None
+    ).order_by(StaffShift.start_time.desc()).first()
+    user_name = shift.staff_name if shift else current_user.name
+
+    audit = AuditLog(
+        user=user_name,
+        action="Prescription Verified",
+        prescription_id=rx.prescription_id,
+        details=f"Verified prescription for patient: {body.patient_name or 'Anonymous Patient'}. Medicines: {', '.join(body.medicines)}"
+    )
+    db.add(audit)
+    db.commit()
+
     return {
         "check_id":     record.check_id,
+        "prescription_id": rx.prescription_id,
         "pharmacist_id": record.pharmacist_id,
         "medicines":    body.medicines,
         "alerts":       alerts,
@@ -156,3 +293,84 @@ def list_checks(
             "created_at":    r.created_at,
         })
     return result
+
+
+@router.get("/latest")
+def get_latest_prescription(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    # Retrieve the latest prescription
+    rx = db.query(Prescription).order_by(Prescription.prescription_date.desc()).first()
+    if not rx:
+        raise HTTPException(status_code=404, detail="No prescriptions found")
+    
+    return {
+        "id": rx.prescription_id,
+        "patientName": rx.patient.name,
+        "patientAge": rx.patient.age,
+        "patientGender": rx.patient.gender,
+        "medicines": [
+            {
+                "id": d.id,
+                "name": d.drug_name_raw,
+                "dosage": d.dosage,
+                "frequency": d.frequency,
+                "duration": d.duration
+            }
+            for d in rx.drugs
+        ]
+    }
+
+
+@router.get("/{prescription_id}")
+def get_prescription(
+    prescription_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    rx = db.query(Prescription).filter(Prescription.prescription_id == prescription_id).first()
+    if not rx:
+        raise HTTPException(status_code=404, detail="Prescription not found")
+    
+    return {
+        "id": rx.prescription_id,
+        "patientName": rx.patient.name,
+        "patientAge": rx.patient.age,
+        "patientGender": rx.patient.gender,
+        "medicines": [
+            {
+                "id": d.id,
+                "name": d.drug_name_raw,
+                "dosage": d.dosage,
+                "frequency": d.frequency,
+                "duration": d.duration
+            }
+            for d in rx.drugs
+        ]
+    }
+
+
+@router.post("/{prescription_id}/instructions/log")
+def log_instruction_generation(
+    prescription_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    shift = db.query(StaffShift).filter(
+        StaffShift.end_time == None
+    ).order_by(StaffShift.start_time.desc()).first()
+    user_name = shift.staff_name if shift else current_user.name
+
+    rx = db.query(Prescription).filter(Prescription.prescription_id == prescription_id).first()
+    patient_name = rx.patient.name if (rx and rx.patient) else "Unknown"
+
+    audit = AuditLog(
+        user=user_name,
+        action="Generated Instructions",
+        prescription_id=prescription_id,
+        details=f"Generated patient medication instructions for: {patient_name}"
+    )
+    db.add(audit)
+    db.commit()
+    return {"status": "success"}

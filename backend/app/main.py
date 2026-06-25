@@ -21,6 +21,7 @@ from .models.instruction import Instruction                  # noqa: F401
 from .models.error_log import ErrorLog                       # noqa: F401
 from .models.interaction_check import InteractionCheck       # noqa: F401
 from .models.staff_shift import StaffShift                   # noqa: F401
+from .models.audit_log import AuditLog                       # noqa: F401
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
@@ -216,36 +217,60 @@ def seed_database(db: Session = Depends(get_db)):
 def get_audit_logs(db: Session = Depends(get_db)):
     logs = []
     
-    sessions = db.query(VerificationSession).all()
-    for s in sessions:
+    # 1. Fetch from custom AuditLog entries
+    audit_entries = db.query(AuditLog).all()
+    for l in audit_entries:
         logs.append({
-            "id": f"sess_{s.session_id[:8]}",
-            "timestamp": s.start_time.strftime("%Y-%m-%d %H:%M:%S"),
-            "user": s.pharmacist.name if s.pharmacist else "System",
-            "action": "Login",
-            "prescriptionId": "—",
-            "details": f"Shift session started. Pharmacist ID: {s.pharmacist_id}"
+            "id": l.id,
+            "timestamp": l.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+            "user": l.user,
+            "action": l.action,
+            "prescriptionId": f"#{l.prescription_id[:4].upper()}" if l.prescription_id else "—",
+            "details": l.details
         })
-        if s.end_time:
+
+    # 2. Fetch shifts (backward compatibility / fallback)
+    shifts = db.query(StaffShift).all()
+    for s in shifts:
+        # Check if we already have this shift log in logs to avoid duplicates
+        if not any(x["action"] == "Login" and x["user"] == s.staff_name and x["timestamp"][:16] == s.start_time.strftime("%Y-%m-%d %H:%M") for x in logs):
             logs.append({
-                "id": f"sesse_{s.session_id[:8]}",
+                "id": f"sess_{s.shift_id[:8]}",
+                "timestamp": s.start_time.strftime("%Y-%m-%d %H:%M:%S"),
+                "user": s.staff_name,
+                "action": "Login",
+                "prescriptionId": "—",
+                "details": f"Shift session started. Role: {s.staff_role}"
+            })
+        if s.end_time and not any(x["action"] == "Logout" and x["user"] == s.staff_name and x["timestamp"][:16] == s.end_time.strftime("%Y-%m-%d %H:%M") for x in logs):
+            logs.append({
+                "id": f"sesse_{s.shift_id[:8]}",
                 "timestamp": s.end_time.strftime("%Y-%m-%d %H:%M:%S"),
-                "user": s.pharmacist.name if s.pharmacist else "System",
+                "user": s.staff_name,
                 "action": "Logout",
                 "prescriptionId": "—",
-                "details": f"Shift session ended. Verified count: {s.prescriptions_verified}"
+                "details": f"Shift session ended."
             })
             
+    # 3. Fetch prescriptions (backward compatibility / fallback)
     prescriptions = db.query(Prescription).all()
     for r in prescriptions:
-        logs.append({
-            "id": f"rx_{r.prescription_id[:8]}",
-            "timestamp": r.prescription_date.strftime("%Y-%m-%d %H:%M:%S"),
-            "user": r.pharmacist.name if r.pharmacist else "System",
-            "action": "Prescription Verified" if r.status == "verified" else "Prescription Dispensed",
-            "prescriptionId": f"#{r.prescription_id[:4].upper()}",
-            "details": f"Prescription status: {r.status}."
-        })
+        if not any(x["prescriptionId"] == f"#{r.prescription_id[:4].upper()}" and x["action"] == "Prescription Verified" for x in logs):
+            shift = db.query(StaffShift).filter(
+                StaffShift.start_time <= r.prescription_date,
+                (StaffShift.end_time == None) | (StaffShift.end_time >= r.prescription_date)
+            ).order_by(StaffShift.start_time.desc()).first()
+            
+            user_name = shift.staff_name if shift else (r.pharmacist.name if r.pharmacist else "System")
+            
+            logs.append({
+                "id": f"rx_{r.prescription_id[:8]}",
+                "timestamp": r.prescription_date.strftime("%Y-%m-%d %H:%M:%S"),
+                "user": user_name,
+                "action": "Prescription Verified" if r.status == "verified" else "Prescription Dispensed" if r.status == "dispensed" else "Prescription Flagged",
+                "prescriptionId": f"#{r.prescription_id[:4].upper()}",
+                "details": f"Prescription status: {r.status}."
+            })
         
     logs.sort(key=lambda x: x["timestamp"], reverse=True)
     

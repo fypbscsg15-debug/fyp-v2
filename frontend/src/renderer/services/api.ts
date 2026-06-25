@@ -59,15 +59,22 @@ export const apiEndpoints = {
     patientName?: string,
     patientAge?: string,
     patientGender?: string,
-    dosages?: string[]
+    dosages?: string[],
+    frequencies?: string[],
+    durations?: string[]
   ) =>
     api.post("/prescriptions/verify", {
       medicines,
       patient_name: patientName,
       patient_age: patientAge,
       patient_gender: patientGender,
-      dosages
+      dosages,
+      frequencies,
+      durations
     }),
+  getPrescription: (id: string) => api.get(`/prescriptions/${id}`),
+  getLatestPrescription: () => api.get("/prescriptions/latest"),
+  logInstructions: (id: string) => api.post(`/prescriptions/${id}/instructions/log`),
   ocrExtract: (id: string) => api.post(`/prescriptions/${id}/ocr`),
   verify: (id: string) => api.get(`/prescriptions/${id}/verify`),
   inventory: () => api.get("/inventory"),

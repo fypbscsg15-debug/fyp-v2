@@ -50,7 +50,7 @@ const VerifyPrescription = () => {
         }
         actions={
           <>
-            <Button variant="outline" onClick={() => navigate(`/instructions/${id}`)}>
+            <Button variant="outline" onClick={() => navigate(`/instructions/${id}`, { state: location.state })}>
               <FileText className="mr-2 h-4 w-4" /> Generate Instructions
             </Button>
             <Button onClick={resolveAll} disabled={alerts.length === 0}>
@@ -102,7 +102,7 @@ const VerifyPrescription = () => {
               <CheckCheck className="mb-3 h-10 w-10 text-success" />
               <h3 className="text-lg font-semibold">No alerts in this category</h3>
               <p className="mt-1 text-sm text-muted-foreground">This prescription is clear to dispense.</p>
-              <Button className="mt-4" onClick={() => navigate(`/instructions/${id}`)}>
+              <Button className="mt-4" onClick={() => navigate(`/instructions/${id}`, { state: location.state })}>
                 Continue to Instructions
               </Button>
             </div>
