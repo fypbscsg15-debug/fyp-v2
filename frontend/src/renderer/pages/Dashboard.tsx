@@ -38,12 +38,13 @@ const Dashboard = () => {
     apiEndpoints.analytics("Today")
       .then((res) => {
         const total = res.data.totalPrescriptions || 0;
+        const shiftTotal = res.data.shiftPrescriptions ?? total;
         const errors = res.data.totalErrors || 0;
         const pending = res.data.pendingVerification || 0;
         const rate = total > 0 ? Math.round(((total - errors) / total) * 100) : 95;
         setStats((prev) => ({
           ...prev,
-          todaysPrescriptions: total,
+          todaysPrescriptions: shiftTotal,
           errorDetectionRate: rate,
           pendingVerification: pending,
         }));
@@ -72,7 +73,7 @@ const Dashboard = () => {
       <PageHeader title="Dashboard" description="Today's clinical overview at a glance" />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Today's Prescriptions" value={stats.todaysPrescriptions} icon={FileText} tone="primary" trend="↑ 12% vs yesterday" />
+        <StatCard title="My Shift Prescriptions" value={stats.todaysPrescriptions} icon={FileText} tone="primary" trend="Your prescriptions (last 24h)" />
         <StatCard title="Pending Verification" value={stats.pendingVerification} icon={Clock} tone="warning" trend="Requires review" />
         <StatCard title="Error Detection Rate" value={stats.errorDetectionRate} suffix="%" icon={BarChart3} tone="success" trend="Above 95% target" />
         <StatCard title="Low Stock Alerts" value={stats.lowStockAlerts} icon={Package} tone="danger" trend="Restock recommended" />

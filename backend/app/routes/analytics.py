@@ -19,13 +19,57 @@ def get_analytics(
     from sqlalchemy import func
 
     today = date.today()
+    now = datetime.utcnow()
     start_date = None
     end_date = None
 
+    # For "Today": use a 24-hour rolling UTC window to avoid timezone mismatches
     if range_val == "Today":
-        start_date = today
-        end_date = today
-    elif range_val == "This Week":
+        start_dt = now - timedelta(hours=24)
+        end_dt = now
+
+        total_prescriptions = db.query(Prescription).filter(
+            Prescription.prescription_date >= start_dt,
+            Prescription.prescription_date <= end_dt
+        ).count()
+
+        total_errors = db.query(Prescription).filter(
+            Prescription.prescription_date >= start_dt,
+            Prescription.prescription_date <= end_dt,
+            Prescription.status == "error"
+        ).count()
+
+        pending_prescriptions = db.query(Prescription).filter(
+            Prescription.prescription_date >= start_dt,
+            Prescription.prescription_date <= end_dt,
+            Prescription.status == "pending"
+        ).count()
+
+        # Shift prescriptions: only by the currently logged-in pharmacist (last 24h)
+        shift_prescriptions = db.query(Prescription).filter(
+            Prescription.prescription_date >= start_dt,
+            Prescription.prescription_date <= end_dt,
+            Prescription.pharmacist_id == current_user.pharmacist_id
+        ).count()
+
+        rate = 100
+        if total_prescriptions > 0:
+            rate = int(((total_prescriptions - total_errors) / total_prescriptions) * 100)
+
+        return {
+            "totalPrescriptions": total_prescriptions,
+            "shiftPrescriptions": shift_prescriptions,
+            "totalErrors": total_errors,
+            "pendingVerification": pending_prescriptions,
+            "avgVerificationTime": 2.4 if total_prescriptions > 0 else 0.0,
+            "topAlert": {"name": "Drug Interactions", "percent": 100},
+            "volumeData": [],
+            "accuracyData": [],
+            "alertTypes": [],
+            "verificationTime": []
+        }
+
+    if range_val == "This Week":
         start_date = today - timedelta(days=today.weekday())
         end_date = start_date + timedelta(days=6)
     elif range_val == "This Month":
