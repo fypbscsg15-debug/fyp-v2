@@ -15,7 +15,7 @@ Start-Sleep -Seconds 3
 
 # --- Frontend ---
 Write-Host "Starting frontend on http://localhost:8080 ..." -ForegroundColor Yellow
-Start-Process -FilePath "cmd.exe" -ArgumentList "/k cd /d `"$root\frontend`" && npm run dev" -WindowStyle Normal
+Start-Process -FilePath "cmd.exe" -ArgumentList "/k cd /d `"$root\frontend`" && set VITE_WEB_ONLY=true && npm run dev" -WindowStyle Normal
 
 Write-Host "`nDone! Open http://localhost:8080 in your browser." -ForegroundColor Green
 Write-Host "Login: PHARM-001 / 1234" -ForegroundColor Green

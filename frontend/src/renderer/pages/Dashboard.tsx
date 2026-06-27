@@ -73,7 +73,7 @@ const Dashboard = () => {
       <PageHeader title="Dashboard" description="Today's clinical overview at a glance" />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="My Shift Prescriptions" value={stats.todaysPrescriptions} icon={FileText} tone="primary" trend="Your prescriptions (last 24h)" />
+        <StatCard title="My Shift Prescriptions" value={stats.todaysPrescriptions} icon={FileText} tone="primary" trend="Your prescriptions (last 7 days)" />
         <StatCard title="Pending Verification" value={stats.pendingVerification} icon={Clock} tone="warning" trend="Requires review" />
         <StatCard title="Error Detection Rate" value={stats.errorDetectionRate} suffix="%" icon={BarChart3} tone="success" trend="Above 95% target" />
         <StatCard title="Low Stock Alerts" value={stats.lowStockAlerts} icon={Package} tone="danger" trend="Restock recommended" />

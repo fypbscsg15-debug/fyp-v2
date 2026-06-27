@@ -34,7 +34,7 @@ from .routes.analytics import router as analytics_router
 from .routes.inventory import router as inventory_router
 from .routes.reports import router as reports_router
 from .routes.dosage import router as dosage_router
-from .utils.auth import hash_password
+from .utils.auth import hash_password, get_current_user
 from .utils.drug_interaction import preload_model
 
 
@@ -50,6 +50,21 @@ def _seed_default_admin():
                 role="admin",
             ))
             db.commit()
+
+        default_staff = [
+            ("Qasim", "qasim@spss.health"),
+            ("Hussain", "hussain@spss.health"),
+            ("Rohaan", "rohaan@spss.health")
+        ]
+        for name, email in default_staff:
+            if not db.query(Pharmacist).filter(Pharmacist.email == email).first():
+                db.add(Pharmacist(
+                    name=name,
+                    email=email,
+                    password_hash=hash_password("1234"),
+                    role="pharmacist",
+                ))
+        db.commit()
     finally:
         db.close()
 
@@ -116,25 +131,25 @@ def seed_database(db: Session = Depends(get_db)):
             password_hash=hash_password("1234"),
             role="admin",
         )
-        p_ali = Pharmacist(
-            name="Dr. Ali",
-            email="ali@spss.health",
+        p_qasim = Pharmacist(
+            name="Qasim",
+            email="qasim@spss.health",
             password_hash=hash_password("1234"),
             role="pharmacist",
         )
-        p_sara = Pharmacist(
-            name="Dr. Sara",
-            email="sara@spss.health",
+        p_hussain = Pharmacist(
+            name="Hussain",
+            email="hussain@spss.health",
             password_hash=hash_password("1234"),
             role="pharmacist",
         )
-        p_hassan = Pharmacist(
-            name="Dr. Hassan",
-            email="hassan@spss.health",
+        p_rohaan = Pharmacist(
+            name="Rohaan",
+            email="rohaan@spss.health",
             password_hash=hash_password("1234"),
             role="pharmacist",
         )
-        db.add_all([p_admin, p_ali, p_sara, p_hassan])
+        db.add_all([p_admin, p_qasim, p_hussain, p_rohaan])
         db.commit()
 
         patient = Patient(
@@ -214,11 +229,17 @@ def seed_database(db: Session = Depends(get_db)):
 
 
 @app.get("/audit-logs")
-def get_audit_logs(db: Session = Depends(get_db)):
+def get_audit_logs(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
+    shift = db.query(StaffShift).filter(StaffShift.end_time == None).order_by(StaffShift.start_time.desc()).first()
+    active_user = shift.staff_name if shift else current_user.name
+
+    active_db_user = db.query(Pharmacist).filter(Pharmacist.name == active_user).first()
+    active_pharmacist_id = active_db_user.pharmacist_id if active_db_user else current_user.pharmacist_id
+
     logs = []
     
-    # 1. Fetch from custom AuditLog entries
-    audit_entries = db.query(AuditLog).all()
+    # 1. Fetch from custom AuditLog entries (filter by user)
+    audit_entries = db.query(AuditLog).filter(AuditLog.user == active_user).all()
     for l in audit_entries:
         logs.append({
             "id": l.id,
@@ -230,7 +251,7 @@ def get_audit_logs(db: Session = Depends(get_db)):
         })
 
     # 2. Fetch shifts (backward compatibility / fallback)
-    shifts = db.query(StaffShift).all()
+    shifts = db.query(StaffShift).filter(StaffShift.staff_name == active_user).all()
     for s in shifts:
         # Check if we already have this shift log in logs to avoid duplicates
         if not any(x["action"] == "Login" and x["user"] == s.staff_name and x["timestamp"][:16] == s.start_time.strftime("%Y-%m-%d %H:%M") for x in logs):
@@ -253,15 +274,16 @@ def get_audit_logs(db: Session = Depends(get_db)):
             })
             
     # 3. Fetch prescriptions (backward compatibility / fallback)
-    prescriptions = db.query(Prescription).all()
+    prescriptions = db.query(Prescription).filter(Prescription.pharmacist_id == active_pharmacist_id).all()
     for r in prescriptions:
         if not any(x["prescriptionId"] == f"#{r.prescription_id[:4].upper()}" and x["action"] == "Prescription Verified" for x in logs):
-            shift = db.query(StaffShift).filter(
+            shift_rec = db.query(StaffShift).filter(
                 StaffShift.start_time <= r.prescription_date,
-                (StaffShift.end_time == None) | (StaffShift.end_time >= r.prescription_date)
+                (StaffShift.end_time == None) | (StaffShift.end_time >= r.prescription_date),
+                StaffShift.staff_name == active_user
             ).order_by(StaffShift.start_time.desc()).first()
             
-            user_name = shift.staff_name if shift else (r.pharmacist.name if r.pharmacist else "System")
+            user_name = shift_rec.staff_name if shift_rec else (r.pharmacist.name if r.pharmacist else "System")
             
             logs.append({
                 "id": f"rx_{r.prescription_id[:8]}",
@@ -275,17 +297,7 @@ def get_audit_logs(db: Session = Depends(get_db)):
     logs.sort(key=lambda x: x["timestamp"], reverse=True)
     
     if not logs:
-        logs = [
-            {
-                "id": f"log_{i}",
-                "timestamp": f"2025-04-{str(15 - (i % 10)).zfill(2)} 10:42:00",
-                "user": ["Dr. Ali", "Dr. Sara", "Admin", "Dr. Hassan"][i % 4],
-                "action": ["Prescription Verified", "Override Applied", "Inventory Updated", "Alert Resolved", "Login", "Settings Changed"][i % 6],
-                "prescriptionId": f"#{1023 - i}",
-                "details": "Action completed successfully without anomalies."
-            }
-            for i in range(15)
-        ]
+        logs = []
         
     return logs
 

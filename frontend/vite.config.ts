@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(), 
     mode === "development" && componentTagger(),
-    electron([
+    !process.env.VITE_WEB_ONLY && electron([
       {
         entry: "src/main/main.ts",
       },
@@ -41,7 +41,7 @@ export default defineConfig(({ mode }) => ({
         },
       },
     ]),
-    renderer(),
+    !process.env.VITE_WEB_ONLY && renderer(),
   ].filter(Boolean),
   resolve: {
     alias: {

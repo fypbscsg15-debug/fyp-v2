@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.prescription import Prescription
 from ..models.alert import Alert
+from ..models.staff_shift import StaffShift
+from ..models.user import Pharmacist
 from ..utils.auth import get_current_user
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -25,52 +27,62 @@ def get_analytics(
 
     # For "Today": use a 24-hour rolling UTC window to avoid timezone mismatches
     if range_val == "Today":
-        start_dt = now - timedelta(hours=24)
+        start_dt = now - timedelta(days=7)
         end_dt = now
+
+        shift = db.query(StaffShift).filter(StaffShift.end_time == None).order_by(StaffShift.start_time.desc()).first()
+        active_user = shift.staff_name if shift else current_user.name
+        active_db_user = db.query(Pharmacist).filter(Pharmacist.name == active_user).first()
+        active_pharmacist_id = active_db_user.pharmacist_id if active_db_user else current_user.pharmacist_id
 
         total_prescriptions = db.query(Prescription).filter(
             Prescription.prescription_date >= start_dt,
-            Prescription.prescription_date <= end_dt
+            Prescription.prescription_date <= end_dt,
+            Prescription.pharmacist_id == active_pharmacist_id
         ).count()
 
         total_errors = db.query(Prescription).filter(
             Prescription.prescription_date >= start_dt,
             Prescription.prescription_date <= end_dt,
-            Prescription.status == "error"
+            Prescription.status == "error",
+            Prescription.pharmacist_id == active_pharmacist_id
         ).count()
 
         pending_prescriptions = db.query(Prescription).filter(
             Prescription.prescription_date >= start_dt,
             Prescription.prescription_date <= end_dt,
-            Prescription.status == "pending"
+            Prescription.status == "pending",
+            Prescription.pharmacist_id == active_pharmacist_id
         ).count()
 
-        # Shift prescriptions: only by the currently logged-in pharmacist (last 24h)
+        # Shift prescriptions: only by the currently logged-in pharmacist
         shift_prescriptions = db.query(Prescription).filter(
             Prescription.prescription_date >= start_dt,
             Prescription.prescription_date <= end_dt,
-            Prescription.pharmacist_id == current_user.pharmacist_id
+            Prescription.pharmacist_id == active_pharmacist_id
         ).count()
 
-        # Build real-time 4-hour intervals for Today charts
+        # Build real-time 1-day intervals for 7-day charts
         volume_data = []
         accuracy_data = []
         verification_time = []
-        num_intervals = 6
+        num_intervals = 7
         for i in range(num_intervals):
-            interval_start = start_dt + timedelta(hours=i*4)
-            interval_end = interval_start + timedelta(hours=4)
-            label = interval_start.strftime("%H:%M")
+            interval_start = start_dt + timedelta(days=i)
+            interval_end = interval_start + timedelta(days=1)
+            label = interval_start.strftime("%a")
 
             cnt = db.query(Prescription).filter(
                 Prescription.prescription_date >= interval_start,
-                Prescription.prescription_date < interval_end
+                Prescription.prescription_date < interval_end,
+                Prescription.pharmacist_id == active_pharmacist_id
             ).count()
 
             errs = db.query(Prescription).filter(
                 Prescription.prescription_date >= interval_start,
                 Prescription.prescription_date < interval_end,
-                Prescription.status == "error"
+                Prescription.status == "error",
+                Prescription.pharmacist_id == active_pharmacist_id
             ).count()
 
             acc = 100
@@ -87,21 +99,25 @@ def get_analytics(
             "interaction": db.query(Alert).join(Prescription).filter(
                 Prescription.prescription_date >= start_dt,
                 Prescription.prescription_date <= end_dt,
+                Prescription.pharmacist_id == active_pharmacist_id,
                 Alert.alert_type == "interaction"
             ).count(),
             "dosage": db.query(Alert).join(Prescription).filter(
                 Prescription.prescription_date >= start_dt,
                 Prescription.prescription_date <= end_dt,
+                Prescription.pharmacist_id == active_pharmacist_id,
                 Alert.alert_type == "dosage"
             ).count(),
             "contraindication": db.query(Alert).join(Prescription).filter(
                 Prescription.prescription_date >= start_dt,
                 Prescription.prescription_date <= end_dt,
+                Prescription.pharmacist_id == active_pharmacist_id,
                 Alert.alert_type == "contraindication"
             ).count(),
             "duplicate": db.query(Alert).join(Prescription).filter(
                 Prescription.prescription_date >= start_dt,
                 Prescription.prescription_date <= end_dt,
+                Prescription.pharmacist_id == active_pharmacist_id,
                 Alert.alert_type == "duplicate"
             ).count(),
         }

@@ -14,6 +14,7 @@ from ..models.drug import Drug
 from ..models.alert import Alert
 from ..models.staff_shift import StaffShift
 from ..models.audit_log import AuditLog
+from ..models.user import Pharmacist
 from ..schemas.schemas import InteractionCheckResponse
 from ..utils.auth import get_current_user
 from ..utils.drug_interaction import check_drug_interactions
@@ -166,9 +167,16 @@ def verify_prescription(
             db.refresh(patient)
 
     # 2. Create Prescription
+    shift = db.query(StaffShift).filter(
+        StaffShift.end_time == None
+    ).order_by(StaffShift.start_time.desc()).first()
+    active_user = shift.staff_name if shift else current_user.name
+    active_db_user = db.query(Pharmacist).filter(Pharmacist.name == active_user).first()
+    active_pharmacist_id = active_db_user.pharmacist_id if active_db_user else current_user.pharmacist_id
+
     rx = Prescription(
         patient_id=patient.patient_id,
-        pharmacist_id=current_user.pharmacist_id,
+        pharmacist_id=active_pharmacist_id,
         status="error" if has_high else "verified",
         ocr_extracted_text=json.dumps(body.medicines),
         is_emergency=False
@@ -240,7 +248,8 @@ def verify_prescription(
 
     # Log action to AuditLog
     shift = db.query(StaffShift).filter(
-        StaffShift.end_time == None
+        StaffShift.end_time == None,
+        StaffShift.staff_name == current_user.name
     ).order_by(StaffShift.start_time.desc()).first()
     user_name = shift.staff_name if shift else current_user.name
 
@@ -274,8 +283,16 @@ def list_checks(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
+    shift = db.query(StaffShift).filter(
+        StaffShift.end_time == None
+    ).order_by(StaffShift.start_time.desc()).first()
+    active_user = shift.staff_name if shift else current_user.name
+    active_db_user = db.query(Pharmacist).filter(Pharmacist.name == active_user).first()
+    active_pharmacist_id = active_db_user.pharmacist_id if active_db_user else current_user.pharmacist_id
+
     rows = (
         db.query(InteractionCheck)
+        .filter(InteractionCheck.pharmacist_id == active_pharmacist_id)
         .order_by(InteractionCheck.created_at.desc())
         .limit(limit)
         .all()
@@ -301,7 +318,16 @@ def get_latest_prescription(
     current_user=Depends(get_current_user),
 ):
     # Retrieve the latest prescription
-    rx = db.query(Prescription).order_by(Prescription.prescription_date.desc()).first()
+    shift = db.query(StaffShift).filter(
+        StaffShift.end_time == None
+    ).order_by(StaffShift.start_time.desc()).first()
+    active_user = shift.staff_name if shift else current_user.name
+    active_db_user = db.query(Pharmacist).filter(Pharmacist.name == active_user).first()
+    active_pharmacist_id = active_db_user.pharmacist_id if active_db_user else current_user.pharmacist_id
+
+    rx = db.query(Prescription).filter(
+        Prescription.pharmacist_id == active_pharmacist_id
+    ).order_by(Prescription.prescription_date.desc()).first()
     if not rx:
         raise HTTPException(status_code=404, detail="No prescriptions found")
     
@@ -329,7 +355,17 @@ def get_prescription(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    rx = db.query(Prescription).filter(Prescription.prescription_id == prescription_id).first()
+    shift = db.query(StaffShift).filter(
+        StaffShift.end_time == None
+    ).order_by(StaffShift.start_time.desc()).first()
+    active_user = shift.staff_name if shift else current_user.name
+    active_db_user = db.query(Pharmacist).filter(Pharmacist.name == active_user).first()
+    active_pharmacist_id = active_db_user.pharmacist_id if active_db_user else current_user.pharmacist_id
+
+    rx = db.query(Prescription).filter(
+        Prescription.prescription_id == prescription_id,
+        Prescription.pharmacist_id == active_pharmacist_id
+    ).first()
     if not rx:
         raise HTTPException(status_code=404, detail="Prescription not found")
     

@@ -3,11 +3,13 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.prescription import Prescription
 from ..models.alert import Alert
 from ..models.inventory import Inventory
+from ..models.audit_log import AuditLog
 from ..utils.auth import get_current_user
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -83,8 +85,8 @@ def generate_report(
 
     # Filter prescriptions by date and pharmacist
     px_query = db.query(Prescription).filter(
-        Prescription.prescription_date >= from_dt,
-        Prescription.prescription_date <= to_dt
+        func.date(Prescription.prescription_date, 'localtime') >= body.from_date,
+        func.date(Prescription.prescription_date, 'localtime') <= body.to_date
     )
 
     if body.pharmacist and body.pharmacist != "all":
@@ -94,8 +96,8 @@ def generate_report(
 
     # Filter alerts by date, pharmacist and severity
     alert_query = db.query(Alert).join(Prescription).filter(
-        Prescription.prescription_date >= from_dt,
-        Prescription.prescription_date <= to_dt
+        func.date(Prescription.prescription_date, 'localtime') >= body.from_date,
+        func.date(Prescription.prescription_date, 'localtime') <= body.to_date
     )
 
     if body.pharmacist and body.pharmacist != "all":
@@ -189,6 +191,43 @@ def generate_report(
                 ["No low stock items in inventory."]
             ]
         t = Table(data, colWidths=[150, 70, 70, 70] if low_items else [360])
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#f1f5f9")),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.HexColor("#0f172a")),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 9),
+        ]))
+        story.append(t)
+        story.append(Spacer(1, 12))
+
+    if "audit" in body.selected:
+        story.append(Paragraph("4. Audit Log & Activities Report", h2_style))
+        
+        audit_query = db.query(AuditLog).filter(
+            func.date(AuditLog.timestamp, 'localtime') >= body.from_date,
+            func.date(AuditLog.timestamp, 'localtime') <= body.to_date
+        )
+        if body.pharmacist and body.pharmacist != "all":
+            audit_query = audit_query.filter(AuditLog.user == body.pharmacist)
+            
+        logs_list = audit_query.order_by(AuditLog.timestamp.desc()).all()
+        
+        if logs_list:
+            data = [["Date/Time", "Action", "Details"]]
+            for item in logs_list[:20]:
+                data.append([
+                    item.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                    item.action or "—",
+                    (item.details[:40] + "...") if item.details and len(item.details) > 40 else (item.details or "—")
+                ])
+        else:
+            data = [
+                ["Status"],
+                ["No activities logged for the selected criteria."]
+            ]
+            
+        t = Table(data, colWidths=[110, 110, 260] if logs_list else [480])
         t.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#f1f5f9")),
             ('TEXTCOLOR', (0,0), (-1,0), colors.HexColor("#0f172a")),

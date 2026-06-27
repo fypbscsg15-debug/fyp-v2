@@ -117,8 +117,13 @@ def delete_pharmacist(pharmacist_id: str, db: Session = Depends(get_db)):
 
 @router.post("/shift/start", response_model=StaffShiftResponse)
 def start_shift(body: StaffShiftStart, db: Session = Depends(get_db)):
+    # Verify staff is registered in database
+    staff = db.query(Pharmacist).filter(Pharmacist.name.ilike(body.staff_name.strip())).first()
+    if not staff:
+        raise HTTPException(status_code=400, detail="Error Staff Not Registered")
+
     shift = StaffShift(
-        staff_name=body.staff_name,
+        staff_name=staff.name,
         staff_role=body.staff_role,
         start_time=datetime.now()
     )

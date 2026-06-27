@@ -23,8 +23,9 @@ export const StaffUnlock = () => {
       const res = await apiEndpoints.startShift({ staff_name: name.trim(), staff_role: role });
       const shift = res.data;
       setStaffSession(name.trim(), role, shift.shift_id);
-    } catch (err) {
-      setError("Failed to start shift in system.");
+    } catch (err: any) {
+      const errMsg = err.response?.data?.detail || "Failed to start shift in system.";
+      setError(errMsg);
     }
   };
 
@@ -71,7 +72,6 @@ export const StaffUnlock = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Pharmacist">Pharmacist</SelectItem>
-                  <SelectItem value="Medician">Medician</SelectItem>
                 </SelectContent>
               </Select>
             </div>
