@@ -25,6 +25,21 @@ def generate_report(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    if not body.from_date or not body.to_date:
+        raise HTTPException(
+            status_code=400,
+            detail="Please select both From and To dates for the report."
+        )
+
+    try:
+        from_dt = datetime.strptime(body.from_date, "%Y-%m-%d")
+        to_dt = datetime.strptime(body.to_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid date format. Expected YYYY-MM-DD."
+        )
+
     try:
         from reportlab.lib.pagesizes import letter
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -64,16 +79,40 @@ def generate_report(
         spaceAfter=6
     )
 
+    from ..models.user import Pharmacist
+
+    # Filter prescriptions by date and pharmacist
+    px_query = db.query(Prescription).filter(
+        Prescription.prescription_date >= from_dt,
+        Prescription.prescription_date <= to_dt
+    )
+
+    if body.pharmacist and body.pharmacist != "all":
+        px_query = px_query.join(Prescription.pharmacist).filter(
+            Pharmacist.name == body.pharmacist
+        )
+
+    # Filter alerts by date, pharmacist and severity
+    alert_query = db.query(Alert).join(Prescription).filter(
+        Prescription.prescription_date >= from_dt,
+        Prescription.prescription_date <= to_dt
+    )
+
+    if body.pharmacist and body.pharmacist != "all":
+        alert_query = alert_query.filter(
+            Prescription.pharmacist.has(name=body.pharmacist)
+        )
+
     story.append(Paragraph("SPSS Clinical & Operational Report", title_style))
-    story.append(Paragraph(f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Scope: {', '.join(body.selected)}", subtitle_style))
+    story.append(Paragraph(f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Date Range: {body.from_date} to {body.to_date} | Pharmacist: {body.pharmacist} | Severity: {body.severity}", subtitle_style))
     story.append(Spacer(1, 12))
 
     if "prescription" in body.selected:
         story.append(Paragraph("1. Prescription Activity Summary", h2_style))
-        total = db.query(Prescription).count()
-        verified = db.query(Prescription).filter(Prescription.status == "verified").count()
-        errors = db.query(Prescription).filter(Prescription.status == "error").count()
-        pending = db.query(Prescription).filter(Prescription.status == "pending").count()
+        total = px_query.count()
+        verified = px_query.filter(Prescription.status == "verified").count()
+        errors = px_query.filter(Prescription.status == "error").count()
+        pending = px_query.filter(Prescription.status == "pending").count()
         
         data = [
             ["Metric", "Value"],
@@ -97,10 +136,22 @@ def generate_report(
 
     if "errors" in body.selected:
         story.append(Paragraph("2. Safety & Error Analysis", h2_style))
-        ints = db.query(Alert).filter(Alert.alert_type == "interaction").count()
-        dos = db.query(Alert).filter(Alert.alert_type == "dosage").count()
-        con = db.query(Alert).filter(Alert.alert_type == "contraindication").count()
-        dup = db.query(Alert).filter(Alert.alert_type == "duplicate").count()
+        
+        ints_q = alert_query.filter(Alert.alert_type == "interaction")
+        dos_q = alert_query.filter(Alert.alert_type == "dosage")
+        con_q = alert_query.filter(Alert.alert_type == "contraindication")
+        dup_q = alert_query.filter(Alert.alert_type == "duplicate")
+
+        if body.severity and body.severity != "all":
+            ints_q = ints_q.filter(Alert.severity == body.severity)
+            dos_q = dos_q.filter(Alert.severity == body.severity)
+            con_q = con_q.filter(Alert.severity == body.severity)
+            dup_q = dup_q.filter(Alert.severity == body.severity)
+
+        ints = ints_q.count()
+        dos = dos_q.count()
+        con = con_q.count()
+        dup = dup_q.count()
 
         data = [
             ["Alert Category", "Incidents Detected"],

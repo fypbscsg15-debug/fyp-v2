@@ -75,6 +75,7 @@ export const apiEndpoints = {
   getPrescription: (id: string) => api.get(`/prescriptions/${id}`),
   getLatestPrescription: () => api.get("/prescriptions/latest"),
   logInstructions: (id: string) => api.post(`/prescriptions/${id}/instructions/log`),
+  dispensePrescription: (id: string) => api.post(`/prescriptions/${id}/dispense`),
   ocrExtract: (id: string) => api.post(`/prescriptions/${id}/ocr`),
   verify: (id: string) => api.get(`/prescriptions/${id}/verify`),
   inventory: () => api.get("/inventory"),

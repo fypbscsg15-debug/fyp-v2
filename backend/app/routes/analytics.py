@@ -52,9 +52,80 @@ def get_analytics(
             Prescription.pharmacist_id == current_user.pharmacist_id
         ).count()
 
-        rate = 100
-        if total_prescriptions > 0:
-            rate = int(((total_prescriptions - total_errors) / total_prescriptions) * 100)
+        # Build real-time 4-hour intervals for Today charts
+        volume_data = []
+        accuracy_data = []
+        verification_time = []
+        num_intervals = 6
+        for i in range(num_intervals):
+            interval_start = start_dt + timedelta(hours=i*4)
+            interval_end = interval_start + timedelta(hours=4)
+            label = interval_start.strftime("%H:%M")
+
+            cnt = db.query(Prescription).filter(
+                Prescription.prescription_date >= interval_start,
+                Prescription.prescription_date < interval_end
+            ).count()
+
+            errs = db.query(Prescription).filter(
+                Prescription.prescription_date >= interval_start,
+                Prescription.prescription_date < interval_end,
+                Prescription.status == "error"
+            ).count()
+
+            acc = 100
+            if cnt > 0:
+                acc = int(((cnt - errs) / cnt) * 100)
+
+            v_time = 2.4 if cnt > 0 else 0.0
+
+            volume_data.append({"day": label, "value": cnt, "target": 8})
+            accuracy_data.append({"day": label, "value": acc, "target": 95})
+            verification_time.append({"day": label, "value": v_time, "target": 3})
+
+        alert_counts = {
+            "interaction": db.query(Alert).join(Prescription).filter(
+                Prescription.prescription_date >= start_dt,
+                Prescription.prescription_date <= end_dt,
+                Alert.alert_type == "interaction"
+            ).count(),
+            "dosage": db.query(Alert).join(Prescription).filter(
+                Prescription.prescription_date >= start_dt,
+                Prescription.prescription_date <= end_dt,
+                Alert.alert_type == "dosage"
+            ).count(),
+            "contraindication": db.query(Alert).join(Prescription).filter(
+                Prescription.prescription_date >= start_dt,
+                Prescription.prescription_date <= end_dt,
+                Alert.alert_type == "contraindication"
+            ).count(),
+            "duplicate": db.query(Alert).join(Prescription).filter(
+                Prescription.prescription_date >= start_dt,
+                Prescription.prescription_date <= end_dt,
+                Alert.alert_type == "duplicate"
+            ).count(),
+        }
+
+        total_alerts = sum(alert_counts.values())
+        if total_alerts > 0:
+            top_type = max(alert_counts, key=alert_counts.get)
+            top_name = {
+                "interaction": "Drug Interactions",
+                "dosage": "Dosage Errors",
+                "contraindication": "Contraindications",
+                "duplicate": "Duplicates"
+            }.get(top_type, "Drug Interactions")
+            top_percent = int((alert_counts[top_type] / total_alerts) * 100)
+        else:
+            top_name = "Drug Interactions"
+            top_percent = 100
+
+        alert_types_list = [
+            {"name": "Drug Interactions", "value": alert_counts["interaction"] or (1 if total_alerts == 0 else 0)},
+            {"name": "Dosage Errors", "value": alert_counts["dosage"]},
+            {"name": "Contraindications", "value": alert_counts["contraindication"]},
+            {"name": "Duplicates", "value": alert_counts["duplicate"]},
+        ]
 
         return {
             "totalPrescriptions": total_prescriptions,
@@ -62,11 +133,11 @@ def get_analytics(
             "totalErrors": total_errors,
             "pendingVerification": pending_prescriptions,
             "avgVerificationTime": 2.4 if total_prescriptions > 0 else 0.0,
-            "topAlert": {"name": "Drug Interactions", "percent": 100},
-            "volumeData": [],
-            "accuracyData": [],
-            "alertTypes": [],
-            "verificationTime": []
+            "topAlert": {"name": top_name, "percent": top_percent},
+            "volumeData": volume_data,
+            "accuracyData": accuracy_data,
+            "alertTypes": alert_types_list,
+            "verificationTime": verification_time
         }
 
     if range_val == "This Week":

@@ -374,3 +374,32 @@ def log_instruction_generation(
     db.add(audit)
     db.commit()
     return {"status": "success"}
+
+
+@router.post("/{prescription_id}/dispense")
+def dispense_prescription(
+    prescription_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    rx = db.query(Prescription).filter(Prescription.prescription_id == prescription_id).first()
+    if rx:
+        rx.status = "dispensed"
+        db.commit()
+
+    shift = db.query(StaffShift).filter(
+        StaffShift.end_time == None
+    ).order_by(StaffShift.start_time.desc()).first()
+    user_name = shift.staff_name if shift else current_user.name
+
+    patient_name = rx.patient.name if (rx and rx.patient) else "Unknown"
+
+    audit = AuditLog(
+        user=user_name,
+        action="Prescription Dispensed",
+        prescription_id=prescription_id,
+        details=f"Dispensed prescription for patient: {patient_name}"
+    )
+    db.add(audit)
+    db.commit()
+    return {"status": "success"}

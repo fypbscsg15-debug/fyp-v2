@@ -1,8 +1,18 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, shell, ipcMain } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+ipcMain.handle('open-external', async (_event, url) => {
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (err: any) {
+    console.error('Failed to open external link:', err);
+    return { success: false, error: err.message };
+  }
+});
 
 // The built directory structure
 //
@@ -28,6 +38,14 @@ function createWindow() {
     },
     width: 1200,
     height: 800,
+  });
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https:') || url.startsWith('http:') || url.startsWith('mailto:') || url.startsWith('sms:')) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
   });
 
   // Test active push message to Renderer-process.

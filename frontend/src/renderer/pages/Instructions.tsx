@@ -17,13 +17,55 @@ import jsPDF from "jspdf";
 
 type SendChannel = "sms" | "whatsapp" | "email" | "print";
 
+const translateTimingToUrdu = (frequency: string = "", duration: string = ""): string => {
+  const freq = frequency.toLowerCase().trim();
+  let dur = duration.toLowerCase().trim();
+
+  // 1. Translate frequency
+  let freqUrdu = frequency;
+  if (freq === "once daily" || freq === "1x/day" || freq === "1/day" || freq === "once a day" || freq === "1 time a day") {
+    freqUrdu = "روزانہ ایک بار";
+  } else if (freq === "twice daily" || freq === "2x/day" || freq === "2/day" || freq === "twice a day" || freq === "2 times a day") {
+    freqUrdu = "روزانہ دو بار";
+  } else if (freq === "three times daily" || freq === "3x/day" || freq === "3/day" || freq === "three times a day" || freq === "3 times a day") {
+    freqUrdu = "روزانہ تین بار";
+  } else if (freq === "four times daily" || freq === "4x/day" || freq === "4/day" || freq === "four times a day" || freq === "4 times a day") {
+    freqUrdu = "روزانہ چار بار";
+  } else if (freq === "five times daily" || freq === "5x/day" || freq === "5/day" || freq === "five times a day" || freq === "5 times a day") {
+    freqUrdu = "روزانہ پانچ بار";
+  } else if (freq === "as needed" || freq === "prn") {
+    freqUrdu = "ضرورت پڑنے پر";
+  } else if (freq === "at bedtime" || freq === "bedtime") {
+    freqUrdu = "سوتے وقت";
+  } else if (freq === "weekly") {
+    freqUrdu = "ہفتہ وار";
+  } else {
+    const hoursMatch = freq.match(/every\s+(\d+)\s+hours/);
+    if (hoursMatch) {
+      freqUrdu = `ہر ${hoursMatch[1]} گھنٹے بعد`;
+    }
+  }
+
+  // 2. Translate duration
+  let durUrdu = duration;
+  if (/^\d+$/.test(dur)) {
+    durUrdu = `${dur} دن`;
+  } else {
+    durUrdu = durUrdu.replace(/days?/g, "دن");
+    durUrdu = durUrdu.replace(/weeks?/g, "ہفتے");
+    durUrdu = durUrdu.replace(/months?/g, "مہینے");
+  }
+
+  return `${durUrdu} تک، ${freqUrdu}`;
+};
+
 const Instructions = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const location = useLocation();
   const { t, lang, setLang } = useLanguage();
   const [sendOpen, setSendOpen] = useState(false);
-  const [channel, setChannel] = useState<SendChannel>("sms");
+  const [channel, setChannel] = useState<SendChannel>("whatsapp");
   const [contact, setContact] = useState("");
   const [loading, setLoading] = useState(true);
   const [rx, setRx] = useState<any>(null);
@@ -45,6 +87,10 @@ const Instructions = () => {
         }))
       });
       setLoading(false);
+      // Log instruction generation
+      if (id && id !== "rx_1023" && id !== "rx_ocr") {
+        apiEndpoints.logInstructions(id).catch(console.error);
+      }
       return;
     }
 
@@ -59,6 +105,10 @@ const Instructions = () => {
         
         if (res.data) {
           setRx(res.data);
+          // Log instruction generation
+          if (id && id !== "rx_1023" && id !== "rx_ocr") {
+            apiEndpoints.logInstructions(id).catch(console.error);
+          }
         } else {
           setRx(mockExtractedPrescription);
         }
@@ -95,7 +145,7 @@ Warnings: Contact your pharmacist if you experience adverse effects.`;
   const urduMessage = `${rx.patientName} کے لیے ہدایات
 
 دوائیں:
-${rx.medicines.map((m: any, i: number) => `${i + 1}. ${m.name} ${m.dosage} — دن میں ${m.frequency}، ${m.duration}`).join("\n")}
+${rx.medicines.map((m: any, i: number) => `${i + 1}. ${m.name} ${m.dosage} — ${translateTimingToUrdu(m.frequency, m.duration)}`).join("\n")}
 
 وقت: کھانے کے ساتھ لیں جب تک کہ ہدایت نہ کی جائے۔
 ذخیرہ: کمرے کے درجہ حرارت پر، براہِ راست دھوپ سے دور رکھیں۔
@@ -125,16 +175,64 @@ ${rx.medicines.map((m: any, i: number) => `${i + 1}. ${m.name} ${m.dosage} — �
       toast.error("Please enter contact details");
       return;
     }
+
+    const message = lang === "ur" ? urduMessage : englishMessage;
+
+    const openExternal = (url: string) => {
+      const winWithIpc = window as any;
+      if (winWithIpc.ipcRenderer) {
+        winWithIpc.ipcRenderer.invoke("open-external", url);
+      } else {
+        window.open(url, "_blank");
+      }
+    };
+
+    if (channel === "whatsapp") {
+      let cleaned = contact.replace(/\D/g, "");
+      // Format local Pakistani numbers to international format (replace leading 0 with 92)
+      if (cleaned.startsWith("0")) {
+        cleaned = "92" + cleaned.substring(1);
+      }
+      const url = `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`;
+      openExternal(url);
+      toast.success("Opening WhatsApp...");
+    } else if (channel === "email") {
+      // Use Gmail web composer since many devices don't have a default native mail client configured
+      const subject = t("Medication Instructions", "ہدایاتِ ادویہ");
+      const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(contact)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+      openExternal(url);
+      toast.success("Opening Gmail Compose...");
+    } else if (channel === "print") {
+      handlePrint();
+      toast.success("Opening print dialog...");
+    } else if (channel === "sms") {
+      // Free SMS suggestion: Using the local device's SMS app protocol (works on mobile, and on Windows via Phone Link)
+      const url = `sms:${contact}?body=${encodeURIComponent(message)}`;
+      openExternal(url);
+      toast.success("Opening SMS application...");
+    }
+
     setSendOpen(false);
-    toast.success(`Instructions sent via ${channel.toUpperCase()}`);
     setContact("");
   };
 
+  const handleConfirmDispense = async () => {
+    try {
+      if (id && id !== "rx_1023" && id !== "rx_ocr") {
+        await apiEndpoints.dispensePrescription(id);
+      }
+      toast.success("Prescription marked as dispensed");
+    } catch (err) {
+      console.error("Failed to log dispense:", err);
+    }
+    navigate(`/confirmation/${id}`);
+  };
+
   const channels: { id: SendChannel; label: string; Icon: any; placeholder: string; type: string }[] = [
-    { id: "sms", label: "SMS (Text Message)", Icon: MessageSquare, placeholder: "+92 300 1234567", type: "tel" },
     { id: "whatsapp", label: "WhatsApp", Icon: Smartphone, placeholder: "+92 300 1234567", type: "tel" },
     { id: "email", label: "Email", Icon: Mail, placeholder: "patient@example.com", type: "email" },
     { id: "print", label: "Print (Physical Copy)", Icon: Printer, placeholder: "", type: "text" },
+    { id: "sms", label: "SMS (via local Device)", Icon: MessageSquare, placeholder: "+92 300 1234567", type: "tel" },
   ];
 
   return (
@@ -147,7 +245,7 @@ ${rx.medicines.map((m: any, i: number) => `${i + 1}. ${m.name} ${m.dosage} — �
             <Button variant="outline" onClick={handlePrint}><Printer className="mr-2 h-4 w-4" /> Print</Button>
             <Button variant="outline" onClick={handleDownload}><Download className="mr-2 h-4 w-4" /> Download PDF</Button>
             <Button variant="outline" onClick={() => setSendOpen(true)}><Send className="mr-2 h-4 w-4" /> Send to Patient</Button>
-            <Button onClick={() => navigate(`/confirmation/${id}`)}><CheckCircle2 className="mr-2 h-4 w-4" /> Confirm Dispensing</Button>
+            <Button onClick={handleConfirmDispense}><CheckCircle2 className="mr-2 h-4 w-4" /> Confirm Dispensing</Button>
           </div>
         }
       />
@@ -191,7 +289,7 @@ ${rx.medicines.map((m: any, i: number) => `${i + 1}. ${m.name} ${m.dosage} — �
               </h3>
               <p className={cn("mt-1 text-sm", lang === "ur" && "urdu text-right")}>
                 <span className="font-medium">{t("Timing:", "وقت:")} </span>
-                {t(`${m.frequency} for ${m.duration}`, `${m.duration} تک، ${m.frequency}`)}
+                {lang === "ur" ? translateTimingToUrdu(m.frequency, m.duration) : `${m.frequency} for ${m.duration}`}
               </p>
               <p className={cn("mt-1 text-sm", lang === "ur" && "urdu text-right")}>
                 <span className="font-medium">{t("Storage:", "ذخیرہ:")} </span>

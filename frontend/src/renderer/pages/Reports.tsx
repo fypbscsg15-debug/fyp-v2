@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,10 +26,21 @@ const Reports = () => {
   const [generated, setGenerated] = useState(false);
   const [reportBlob, setReportBlob] = useState<Blob | null>(null);
   const [liveStats, setLiveStats] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    apiEndpoints.listUsers()
+      .then((res) => setUsers(res.data))
+      .catch((e) => console.error("Failed to load users", e));
+  }, []);
 
   const toggle = (id: string) => setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   const generate = async () => {
+    if (!from || !to) {
+      toast.error("Please select a date range (both From and To dates)");
+      return;
+    }
     if (selected.length === 0) {
       toast.error("Select at least one report type");
       return;
@@ -103,9 +114,9 @@ const Reports = () => {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Pharmacists</SelectItem>
-                  <SelectItem value="ali">Dr. Ali</SelectItem>
-                  <SelectItem value="sara">Dr. Sara</SelectItem>
-                  <SelectItem value="hassan">Dr. Hassan</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.pharmacist_id || u.id} value={u.name}>{u.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

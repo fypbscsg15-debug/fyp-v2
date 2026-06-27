@@ -171,7 +171,7 @@ const ChartCard = ({ title, subtitle, children }: { title: string; subtitle?: st
       <h3 className="font-semibold text-foreground">{title}</h3>
       {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
     </div>
-    {children}
+    <div className="h-[250px] w-full">{children}</div>
   </div>
 );
 
