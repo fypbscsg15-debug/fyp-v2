@@ -245,11 +245,9 @@ def verify_prescription(
     db.add(record)
     db.commit()
     db.refresh(record)
-
     # Log action to AuditLog
     shift = db.query(StaffShift).filter(
-        StaffShift.end_time == None,
-        StaffShift.staff_name == current_user.name
+        StaffShift.end_time == None
     ).order_by(StaffShift.start_time.desc()).first()
     user_name = shift.staff_name if shift else current_user.name
 
@@ -435,6 +433,34 @@ def dispense_prescription(
         action="Prescription Dispensed",
         prescription_id=prescription_id,
         details=f"Dispensed prescription for patient: {patient_name}"
+    )
+    db.add(audit)
+    db.commit()
+    return {"status": "success"}
+
+
+class OverrideRequest(BaseModel):
+    action: str
+    details: str
+
+
+@router.post("/{prescription_id}/log-override")
+def log_override(
+    prescription_id: str,
+    body: OverrideRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    shift = db.query(StaffShift).filter(
+        StaffShift.end_time == None
+    ).order_by(StaffShift.start_time.desc()).first()
+    user_name = shift.staff_name if shift else current_user.name
+
+    audit = AuditLog(
+        user=user_name,
+        action=body.action,
+        prescription_id=prescription_id,
+        details=body.details
     )
     db.add(audit)
     db.commit()

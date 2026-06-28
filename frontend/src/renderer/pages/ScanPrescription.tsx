@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -14,6 +14,13 @@ const ScanPrescription = () => {
   const [preview, setPreview] = useState<string>("");
   const [rotation, setRotation] = useState(0);
   const [processing, setProcessing] = useState(false);
+
+  useEffect(() => {
+    const activeSession = sessionStorage.getItem("spss_scan_session");
+    if (activeSession) {
+      navigate("/ocr-review");
+    }
+  }, [navigate]);
 
   const onDrop = useCallback((accepted: File[]) => {
     const f = accepted[0];
@@ -37,14 +44,17 @@ const ScanPrescription = () => {
       const formData = new FormData();
       formData.append("file", file);
       const res = await apiEndpoints.scanPrescription(formData);
+      const scanData = {
+        ocrResults: res.data.results,
+        filename: res.data.filename,
+        textCount: res.data.text_count,
+        imageUrl: preview,
+      };
+      sessionStorage.setItem("spss_scan_session", JSON.stringify(scanData));
+      sessionStorage.removeItem("spss_review_form");
       toast.success("OCR extraction complete");
       navigate("/ocr-review", {
-        state: {
-          ocrResults: res.data.results,
-          filename: res.data.filename,
-          textCount: res.data.text_count,
-          imageUrl: preview,
-        },
+        state: scanData,
       });
     } catch (err: any) {
       const msg =

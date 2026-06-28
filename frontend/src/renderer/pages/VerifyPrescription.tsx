@@ -7,6 +7,7 @@ import { AlertCard } from "@/components/common/AlertCard";
 import { AlertCategory, SafetyAlert } from "@/services/mockData";
 import { toast } from "sonner";
 import { CheckCheck, FileText } from "lucide-react";
+import { apiEndpoints } from "@/services/api";
 
 const VerifyPrescription = () => {
   const navigate = useNavigate();
@@ -29,14 +30,21 @@ const VerifyPrescription = () => {
 
   const filtered = tab === "all" ? alerts : alerts.filter((a) => a.category === tab);
 
-  const resolveOne = (alertId: string) => {
+  const resolveOne = (alertId: string, alertMsg: string) => {
     setAlerts((p) => p.filter((a) => a.id !== alertId));
     toast.success("Alert resolved");
+    if (id && id !== "rx_1023" && id !== "rx_ocr") {
+      apiEndpoints.logOverride(id, "Alert Resolved", `Resolved safety warning: ${alertMsg}`).catch(console.error);
+    }
   };
 
   const resolveAll = () => {
+    const messages = alerts.map((a) => a.title || a.description).join("; ");
     setAlerts([]);
     toast.success("All alerts resolved");
+    if (id && id !== "rx_1023" && id !== "rx_ocr") {
+      apiEndpoints.logOverride(id, "Alert Resolved", `Resolved all safety alerts: ${messages}`).catch(console.error);
+    }
   };
 
   return (
@@ -112,8 +120,14 @@ const VerifyPrescription = () => {
                 key={a.id}
                 alert={a}
                 onViewDetails={() => toast.info(a.title)}
-                onOverride={() => { resolveOne(a.id); toast.warning("Override logged in audit trail"); }}
-                onResolve={() => resolveOne(a.id)}
+                onOverride={() => {
+                  resolveOne(a.id, a.title || a.description);
+                  if (id && id !== "rx_1023" && id !== "rx_ocr") {
+                    apiEndpoints.logOverride(id, "Override Alert", `Overrode safety warning: ${a.title || a.description}`).catch(console.error);
+                  }
+                  toast.warning("Override logged in audit trail");
+                }}
+                onResolve={() => resolveOne(a.id, a.title || a.description)}
               />
             ))
           )}

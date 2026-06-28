@@ -15,7 +15,7 @@ const AuditLog = () => {
   const [query, setQuery] = useState("");
   const [user, setUser] = useState("all");
   const [action, setAction] = useState("all");
-  const [page, setPage] = useState(1);
+  const [visibleCount, setVisibleCount] = useState(10);
 
   useEffect(() => {
     apiEndpoints.auditLogs()
@@ -28,42 +28,73 @@ const AuditLog = () => {
   }, []);
 
   const filtered = useMemo(() => {
-    return logs.filter((l) => {
+    const list = logs.filter((l) => {
       if (query && !`${l.action} ${l.user} ${l.prescriptionId} ${l.details}`.toLowerCase().includes(query.toLowerCase())) return false;
       if (user !== "all" && l.user !== user) return false;
       if (action !== "all" && l.action !== action) return false;
       return true;
     });
+    return [...list].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   }, [logs, query, user, action]);
 
-  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const paginated = filtered.slice(0, visibleCount);
 
   const users = Array.from(new Set(logs.map((l) => l.user)));
   const actions = Array.from(new Set(logs.map((l) => l.action)));
+
+  const handleExport = async () => {
+    try {
+      const res = await apiEndpoints.reports({
+        selected: ["audit"],
+        from_date: "2000-01-01",
+        to_date: "2099-12-31",
+        pharmacist: user,
+        severity: "all"
+      });
+      const base64Data = res.data.pdf_b64;
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `audit_logs_${user}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success("Audit logs exported to PDF successfully!");
+    } catch (err) {
+      toast.error("Failed to export audit logs PDF.");
+    }
+  };
 
   return (
     <div className="mx-auto max-w-7xl">
       <PageHeader
         title="Audit Log"
         description="Complete history of system activity for compliance and review"
-        actions={<Button variant="outline" onClick={() => toast.success("Audit log exported")}><Download className="mr-2 h-4 w-4" /> Export Logs</Button>}
+        actions={<Button variant="outline" onClick={handleExport}><Download className="mr-2 h-4 w-4" /> Export Logs</Button>}
       />
 
       <div className="card-elevated p-4">
         <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="relative lg:col-span-2">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="Search keywords..." className="pl-9" />
+            <Input value={query} onChange={(e) => { setQuery(e.target.value); setVisibleCount(10); }} placeholder="Search keywords..." className="pl-9" />
           </div>
-          <Select value={user} onValueChange={(v) => { setUser(v); setPage(1); }}>
+          <Select value={user} onValueChange={(v) => { setUser(v); setVisibleCount(10); }}>
             <SelectTrigger><SelectValue placeholder="User" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Users</SelectItem>
               {users.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={action} onValueChange={(v) => { setAction(v); setPage(1); }}>
+          <Select value={action} onValueChange={(v) => { setAction(v); setVisibleCount(10); }}>
             <SelectTrigger><SelectValue placeholder="Action" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Actions</SelectItem>
@@ -100,14 +131,15 @@ const AuditLog = () => {
           </table>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+        <div className="mt-4 flex flex-col items-center justify-center gap-3 text-sm">
           <p className="text-muted-foreground">
-            Showing {(page - 1) * PER_PAGE + 1} to {Math.min(page * PER_PAGE, filtered.length)} of {filtered.length} records
+            Showing {Math.min(visibleCount, filtered.length)} of {filtered.length} records
           </p>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</Button>
-            <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</Button>
-          </div>
+          {filtered.length > visibleCount && (
+            <Button size="sm" variant="outline" onClick={() => setVisibleCount((p) => p + 10)}>
+              Show More
+            </Button>
+          )}
         </div>
       </div>
     </div>

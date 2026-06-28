@@ -1,5 +1,5 @@
 import io
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -80,6 +80,14 @@ def generate_report(
         spaceBefore=14,
         spaceAfter=6
     )
+    h3_style = ParagraphStyle(
+        "SubSectionHeader",
+        parent=styles["Heading3"],
+        fontSize=10,
+        textColor=colors.HexColor("#475569"),
+        spaceBefore=8,
+        spaceAfter=4
+    )
 
     from ..models.user import Pharmacist
 
@@ -135,6 +143,33 @@ def generate_report(
         ]))
         story.append(t)
         story.append(Spacer(1, 12))
+
+        # Add list of prescriptions
+        px_list = px_query.order_by(Prescription.prescription_date.desc()).all()
+        if px_list:
+            story.append(Paragraph("Prescription Activity Details", h3_style))
+            details_data = [["Date/Time", "Patient", "Status", "Medicines"]]
+            for p in px_list[:20]:
+                local_date = p.prescription_date.replace(tzinfo=timezone.utc).astimezone()
+                patient_name = p.patient.name if p.patient else "Anonymous"
+                meds_names = ", ".join([d.drug_name_raw for d in p.drugs])
+                details_data.append([
+                    local_date.strftime("%Y-%m-%d %H:%M:%S"),
+                    patient_name,
+                    p.status.capitalize(),
+                    (meds_names[:45] + "...") if len(meds_names) > 45 else meds_names
+                ])
+            px_table = Table(details_data, colWidths=[110, 90, 70, 210])
+            px_table.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#f8fafc")),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.HexColor("#334155")),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e2e8f0")),
+                ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#f8fafc")]),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0,0), (-1,-1), 8),
+            ]))
+            story.append(px_table)
+            story.append(Spacer(1, 12))
 
     if "errors" in body.selected:
         story.append(Paragraph("2. Safety & Error Analysis", h2_style))
@@ -240,4 +275,6 @@ def generate_report(
 
     doc.build(story)
     buffer.seek(0)
-    return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": "attachment; filename=spss_report.pdf"})
+    import base64
+    pdf_b64 = base64.b64encode(buffer.read()).decode("utf-8")
+    return {"pdf_b64": pdf_b64}

@@ -46,21 +46,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const initAuth = async () => {
       try {
         // Rehydrate from storage first for instant UI
-        const rawUser = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY);
+        const rawUser = sessionStorage.getItem(STORAGE_KEY);
         if (rawUser) {
           setUser(JSON.parse(rawUser));
           // Validate token against backend silently
           try {
             const res = await apiEndpoints.me();
             const fresh = mapUser(res.data);
-            const storage = localStorage.getItem(STORAGE_KEY) ? localStorage : sessionStorage;
-            storage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
             setUser(fresh);
           } catch {
             setToken(null);
-            localStorage.removeItem(TOKEN_KEY);
             sessionStorage.removeItem(TOKEN_KEY);
-            localStorage.removeItem(STORAGE_KEY);
             sessionStorage.removeItem(STORAGE_KEY);
             setUser(null);
             clearStaffSession();
@@ -96,13 +93,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setActiveShiftId(null);
   };
 
-  const login = async (email: string, password: string, remember = true) => {
+  const login = async (email: string, password: string, remember = false) => {
     const res = await apiEndpoints.login(email, password);
     const { access_token, user: raw } = res.data;
     const userData = mapUser(raw);
-    const storage = remember ? localStorage : sessionStorage;
-    storage.setItem(TOKEN_KEY, access_token);
-    storage.setItem(STORAGE_KEY, JSON.stringify(userData));
+    sessionStorage.setItem(TOKEN_KEY, access_token);
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
     setToken(access_token);
     setUser(userData);
   };
@@ -114,9 +110,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     apiEndpoints.logout().catch(() => {});
     setToken(null);
-    localStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(STORAGE_KEY);
     sessionStorage.removeItem(STORAGE_KEY);
     setUser(null);
     clearStaffSession();

@@ -26,7 +26,7 @@ from .models.audit_log import AuditLog                       # noqa: F401
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from .database import get_db
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 
 from .routes.auth import router as auth_router
 from .routes.prescriptions import router as prescriptions_router
@@ -233,66 +233,21 @@ def get_audit_logs(db: Session = Depends(get_db), current_user = Depends(get_cur
     shift = db.query(StaffShift).filter(StaffShift.end_time == None).order_by(StaffShift.start_time.desc()).first()
     active_user = shift.staff_name if shift else current_user.name
 
-    active_db_user = db.query(Pharmacist).filter(Pharmacist.name == active_user).first()
-    active_pharmacist_id = active_db_user.pharmacist_id if active_db_user else current_user.pharmacist_id
-
     logs = []
     
-    # 1. Fetch from custom AuditLog entries (filter by user)
+    # Fetch from custom AuditLog entries (filter by user)
     audit_entries = db.query(AuditLog).filter(AuditLog.user == active_user).all()
     for l in audit_entries:
+        # Convert UTC naive datetime to local timezone
+        local_ts = l.timestamp.replace(tzinfo=timezone.utc).astimezone()
         logs.append({
             "id": l.id,
-            "timestamp": l.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": local_ts.strftime("%Y-%m-%d %H:%M:%S"),
             "user": l.user,
             "action": l.action,
             "prescriptionId": f"#{l.prescription_id[:4].upper()}" if l.prescription_id else "—",
             "details": l.details
         })
-
-    # 2. Fetch shifts (backward compatibility / fallback)
-    shifts = db.query(StaffShift).filter(StaffShift.staff_name == active_user).all()
-    for s in shifts:
-        # Check if we already have this shift log in logs to avoid duplicates
-        if not any(x["action"] == "Login" and x["user"] == s.staff_name and x["timestamp"][:16] == s.start_time.strftime("%Y-%m-%d %H:%M") for x in logs):
-            logs.append({
-                "id": f"sess_{s.shift_id[:8]}",
-                "timestamp": s.start_time.strftime("%Y-%m-%d %H:%M:%S"),
-                "user": s.staff_name,
-                "action": "Login",
-                "prescriptionId": "—",
-                "details": f"Shift session started. Role: {s.staff_role}"
-            })
-        if s.end_time and not any(x["action"] == "Logout" and x["user"] == s.staff_name and x["timestamp"][:16] == s.end_time.strftime("%Y-%m-%d %H:%M") for x in logs):
-            logs.append({
-                "id": f"sesse_{s.shift_id[:8]}",
-                "timestamp": s.end_time.strftime("%Y-%m-%d %H:%M:%S"),
-                "user": s.staff_name,
-                "action": "Logout",
-                "prescriptionId": "—",
-                "details": f"Shift session ended."
-            })
-            
-    # 3. Fetch prescriptions (backward compatibility / fallback)
-    prescriptions = db.query(Prescription).filter(Prescription.pharmacist_id == active_pharmacist_id).all()
-    for r in prescriptions:
-        if not any(x["prescriptionId"] == f"#{r.prescription_id[:4].upper()}" and x["action"] == "Prescription Verified" for x in logs):
-            shift_rec = db.query(StaffShift).filter(
-                StaffShift.start_time <= r.prescription_date,
-                (StaffShift.end_time == None) | (StaffShift.end_time >= r.prescription_date),
-                StaffShift.staff_name == active_user
-            ).order_by(StaffShift.start_time.desc()).first()
-            
-            user_name = shift_rec.staff_name if shift_rec else (r.pharmacist.name if r.pharmacist else "System")
-            
-            logs.append({
-                "id": f"rx_{r.prescription_id[:8]}",
-                "timestamp": r.prescription_date.strftime("%Y-%m-%d %H:%M:%S"),
-                "user": user_name,
-                "action": "Prescription Verified" if r.status == "verified" else "Prescription Dispensed" if r.status == "dispensed" else "Prescription Flagged",
-                "prescriptionId": f"#{r.prescription_id[:4].upper()}",
-                "details": f"Prescription status: {r.status}."
-            })
         
     logs.sort(key=lambda x: x["timestamp"], reverse=True)
     

@@ -6,7 +6,7 @@ export const TOKEN_KEY = "spss_auth_token";
 
 // Cached in memory so the interceptor avoids storage I/O on every request
 let _cachedToken: string | null =
-  localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+  sessionStorage.getItem(TOKEN_KEY);
 
 export const setToken = (token: string | null) => {
   _cachedToken = token;
@@ -76,6 +76,8 @@ export const apiEndpoints = {
   getLatestPrescription: () => api.get("/prescriptions/latest"),
   logInstructions: (id: string) => api.post(`/prescriptions/${id}/instructions/log`),
   dispensePrescription: (id: string) => api.post(`/prescriptions/${id}/dispense`),
+  logOverride: (id: string, action: string, details: string) =>
+    api.post(`/prescriptions/${id}/log-override`, { action, details }),
   ocrExtract: (id: string) => api.post(`/prescriptions/${id}/ocr`),
   verify: (id: string) => api.get(`/prescriptions/${id}/verify`),
   inventory: () => api.get("/inventory"),
@@ -83,7 +85,7 @@ export const apiEndpoints = {
   updateInventory: (id: string, payload: any) => api.patch(`/inventory/${id}`, payload),
   analytics: (range: string, start?: string, end?: string) =>
     api.get(`/analytics?range=${range}${start ? `&start=${start}` : ""}${end ? `&end=${end}` : ""}`),
-  reports: (payload: any) => api.post("/reports", payload, { responseType: "blob" }),
+  reports: (payload: any) => api.post("/reports", payload),
   auditLogs: (params?: any) => api.get("/audit-logs", { params }),
   startShift: (payload: { staff_name: string; staff_role: string }) => api.post("/auth/shift/start", payload),
   endShift: (shiftId: string) => api.post(`/auth/shift/end/${shiftId}`),

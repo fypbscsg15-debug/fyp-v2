@@ -24,8 +24,7 @@ const Reports = () => {
   const [severity, setSeverity] = useState("all");
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
-  const [reportBlob, setReportBlob] = useState<Blob | null>(null);
-  const [liveStats, setLiveStats] = useState<any>(null);
+  const [pdfUrl, setPdfUrl] = useState<string>("");
   const [users, setUsers] = useState<any[]>([]);
 
   useEffect(() => {
@@ -33,6 +32,12 @@ const Reports = () => {
       .then((res) => setUsers(res.data))
       .catch((e) => console.error("Failed to load users", e));
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (pdfUrl) window.URL.revokeObjectURL(pdfUrl);
+    };
+  }, [pdfUrl]);
 
   const toggle = (id: string) => setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
@@ -47,6 +52,10 @@ const Reports = () => {
     }
     setGenerating(true);
     try {
+      if (pdfUrl) {
+        window.URL.revokeObjectURL(pdfUrl);
+        setPdfUrl("");
+      }
       const res = await apiEndpoints.reports({
         selected,
         from_date: from || null,
@@ -54,15 +63,16 @@ const Reports = () => {
         pharmacist,
         severity,
       });
-      setReportBlob(res.data);
-      
-      try {
-        const statsRes = await apiEndpoints.analytics("Custom", from || undefined, to || undefined);
-        setLiveStats(statsRes.data);
-      } catch (e) {
-        setLiveStats(null);
+      const base64Data = res.data.pdf_b64;
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
       }
-
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      setPdfUrl(url);
       setGenerated(true);
       toast.success("Report generated successfully!");
     } catch (err: any) {
@@ -73,14 +83,12 @@ const Reports = () => {
   };
 
   const downloadPDF = () => {
-    if (!reportBlob) return;
-    const url = window.URL.createObjectURL(reportBlob);
+    if (!pdfUrl) return;
     const a = document.createElement("a");
-    a.href = url;
+    a.href = pdfUrl;
     a.download = "spss_report.pdf";
     document.body.appendChild(a);
     a.click();
-    window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
     toast.success("PDF report downloaded!");
   };
@@ -148,32 +156,19 @@ const Reports = () => {
             </div>
           </div>
 
-          {!generated ? (
+          {!generated || !pdfUrl ? (
             <div className="flex min-h-[400px] flex-col items-center justify-center rounded-lg border-2 border-dashed text-center">
               <AlertOctagon className="mb-3 h-10 w-10 text-muted-foreground/50" />
               <p className="text-sm font-medium">No Report Generated</p>
               <p className="mt-1 text-xs text-muted-foreground">Configure options and click Generate Report</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="rounded-lg border bg-muted/30 p-4">
-                <h4 className="font-bold">SPSS — {selected.map((s) => REPORT_TYPES.find((r) => r.id === s)?.label).join(", ")}</h4>
-                <p className="text-xs text-muted-foreground">Date range: {from || "All"} → {to || "Today"}</p>
-                <p className="text-xs text-muted-foreground">Generated: {new Date().toLocaleString()}</p>
-              </div>
-              <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/60 text-xs uppercase text-muted-foreground">
-                    <tr><th className="p-3 text-left">Metric</th><th className="p-3 text-left">Value</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-t"><td className="p-3">Total Prescriptions</td><td className="p-3 font-semibold">{liveStats?.totalPrescriptions ?? 0}</td></tr>
-                    <tr className="border-t"><td className="p-3">Flagged with Errors</td><td className="p-3 font-semibold">{liveStats?.totalErrors ?? 0}</td></tr>
-                    <tr className="border-t"><td className="p-3">Pending Review</td><td className="p-3 font-semibold">{liveStats?.pendingVerification ?? 0}</td></tr>
-                    <tr className="border-t"><td className="p-3">Avg. Verification Time</td><td className="p-3 font-semibold">{liveStats?.avgVerificationTime ?? 0}s</td></tr>
-                  </tbody>
-                </table>
-              </div>
+            <div className="h-[600px] w-full rounded-lg border overflow-hidden bg-muted/20">
+              <iframe
+                src={pdfUrl}
+                className="h-full w-full border-0"
+                title="Report PDF Preview"
+              />
             </div>
           )}
         </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -204,28 +204,41 @@ const OCRReview = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const state = (location.state as {
-    ocrResults?: OcrLine[];
-    filename?: string;
-    textCount?: number;
-    imageUrl?: string;
-  } | null);
+  const sessionData = useMemo(() => {
+    if (location.state && (location.state as any).ocrResults) {
+      sessionStorage.setItem("spss_scan_session", JSON.stringify(location.state));
+      return location.state as any;
+    }
+    const raw = sessionStorage.getItem("spss_scan_session");
+    return raw ? JSON.parse(raw) : null;
+  }, [location.state]);
 
-  const ocrLines: OcrLine[] = state?.ocrResults ?? [];
-  const imageUrl: string    = state?.imageUrl ?? "/placeholder.svg";
+  const ocrLines: OcrLine[] = sessionData?.ocrResults ?? [];
+  const imageUrl: string    = sessionData?.imageUrl ?? "/placeholder.svg";
   const isRealData          = ocrLines.length > 0;
 
   const avgConfidence = isRealData
     ? Math.round((ocrLines.reduce((s, l) => s + l.confidence, 0) / ocrLines.length) * 100)
     : 0;
 
+  const savedForm = useMemo(() => {
+    const raw = sessionStorage.getItem("spss_review_form");
+    return raw ? JSON.parse(raw) : null;
+  }, []);
+
   const [verifying, setVerifying] = useState(false);
-  const [name,   setName]   = useState("");
-  const [age,    setAge]    = useState("");
-  const [gender, setGender] = useState("Male");
-  const [meds, setMeds] = useState<Medicine[]>([
+  const [name,   setName]   = useState(savedForm?.name ?? "");
+  const [age,    setAge]    = useState(savedForm?.age ?? "");
+  const [gender, setGender] = useState(savedForm?.gender ?? "Male");
+  const [meds, setMeds] = useState<Medicine[]>(savedForm?.meds ?? [
     { id: "m1", name: "", dosage: "", frequency: "", duration: "" },
   ]);
+
+  useEffect(() => {
+    if (isRealData || name || age || meds.some(m => m.name)) {
+      sessionStorage.setItem("spss_review_form", JSON.stringify({ name, age, gender, meds }));
+    }
+  }, [name, age, gender, meds, isRealData]);
 
   const handleAutoFill = () => {
     if (!isRealData) { toast.warning("No OCR data available. Upload a prescription first."); return; }
@@ -274,6 +287,8 @@ const OCRReview = () => {
         durations
       );
       toast.success("Safety check complete");
+      sessionStorage.removeItem("spss_scan_session");
+      sessionStorage.removeItem("spss_review_form");
       const rxId = res.data.prescription_id || "rx_ocr";
       navigate(`/verify/${rxId}`, {
         state: {
@@ -304,7 +319,11 @@ const OCRReview = () => {
         description="Verify extracted data before running clinical safety checks"
         actions={
           <div className="hidden items-center gap-2 sm:flex">
-            <Button variant="outline" onClick={() => navigate("/scan")}>
+            <Button variant="outline" onClick={() => {
+              sessionStorage.removeItem("spss_scan_session");
+              sessionStorage.removeItem("spss_review_form");
+              navigate("/scan");
+            }}>
               <ScanLine className="mr-2 h-4 w-4" /> Rescan
             </Button>
             <Button variant="outline" onClick={handleAutoFill} disabled={!isRealData}>
@@ -450,7 +469,11 @@ const OCRReview = () => {
           )}
 
           <div className="mt-5 flex flex-wrap gap-2 sm:hidden">
-            <Button variant="outline" onClick={() => navigate("/scan")}><ScanLine className="mr-2 h-4 w-4" /> Rescan</Button>
+            <Button variant="outline" onClick={() => {
+              sessionStorage.removeItem("spss_scan_session");
+              sessionStorage.removeItem("spss_review_form");
+              navigate("/scan");
+            }}><ScanLine className="mr-2 h-4 w-4" /> Rescan</Button>
             <Button variant="outline" onClick={handleAutoFill} disabled={!isRealData}><Wand2 className="mr-2 h-4 w-4" /> Auto-fill</Button>
             <Button onClick={handleConfirm} disabled={verifying} className="flex-1">
               {verifying
