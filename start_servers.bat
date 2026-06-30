@@ -4,8 +4,8 @@ start "Backend" cmd /k "cd /d "%~dp0backend" && venv\Scripts\python.exe -m uvico
 
 timeout /t 3 /nobreak >nul
 
-echo Starting Frontend on port 8080...
-start "Frontend" cmd /k "cd /d "%~dp0frontend" && set VITE_WEB_ONLY=true && npm run dev"
+echo Starting Frontend on port 8080 (Electron)...
+start "Frontend" cmd /k "cd /d "%~dp0frontend" && npm run dev"
 
 echo.
 echo Both servers starting in separate windows.
