@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { SeverityBadge } from "./SeverityBadge";
 import { SafetyAlert } from "@/services/mockData";
 import { cn } from "@/lib/utils";
-import { BookOpen, Eye, Shield, Check } from "lucide-react";
+import { BookOpen, Shield, Check } from "lucide-react";
 
 const borderClass: Record<SafetyAlert["severity"], string> = {
   high: "border-l-4 border-l-severity-high",
@@ -12,12 +12,11 @@ const borderClass: Record<SafetyAlert["severity"], string> = {
 
 type Props = {
   alert: SafetyAlert;
-  onViewDetails?: (a: SafetyAlert) => void;
   onOverride?: (a: SafetyAlert) => void;
   onResolve?: (a: SafetyAlert) => void;
 };
 
-export const AlertCard = ({ alert, onViewDetails, onOverride, onResolve }: Props) => {
+export const AlertCard = ({ alert, onOverride, onResolve }: Props) => {
   return (
     <div className={cn("card-elevated p-4 animate-fade-in", borderClass[alert.severity])}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -34,9 +33,6 @@ export const AlertCard = ({ alert, onViewDetails, onOverride, onResolve }: Props
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" onClick={() => onViewDetails?.(alert)}>
-          <Eye className="mr-1.5 h-3.5 w-3.5" /> View Details
-        </Button>
         <Button size="sm" variant="outline" onClick={() => onOverride?.(alert)}>
           <Shield className="mr-1.5 h-3.5 w-3.5" /> Override
         </Button>

@@ -27,7 +27,8 @@ def get_analytics(
 
     # For "Today": use a 24-hour rolling UTC window to avoid timezone mismatches
     if range_val == "Today":
-        start_dt = now - timedelta(days=7)
+        chart_start = now - timedelta(days=7)
+        today_start = now - timedelta(days=1)
         end_dt = now
 
         shift = db.query(StaffShift).filter(StaffShift.end_time == None).order_by(StaffShift.start_time.desc()).first()
@@ -36,20 +37,20 @@ def get_analytics(
         active_pharmacist_id = active_db_user.pharmacist_id if active_db_user else current_user.pharmacist_id
 
         total_prescriptions = db.query(Prescription).filter(
-            Prescription.prescription_date >= start_dt,
+            Prescription.prescription_date >= today_start,
             Prescription.prescription_date <= end_dt,
             Prescription.pharmacist_id == active_pharmacist_id
         ).count()
 
         total_errors = db.query(Prescription).filter(
-            Prescription.prescription_date >= start_dt,
+            Prescription.prescription_date >= today_start,
             Prescription.prescription_date <= end_dt,
             Prescription.status == "error",
             Prescription.pharmacist_id == active_pharmacist_id
         ).count()
 
         pending_prescriptions = db.query(Prescription).filter(
-            Prescription.prescription_date >= start_dt,
+            Prescription.prescription_date >= today_start,
             Prescription.prescription_date <= end_dt,
             Prescription.status == "pending",
             Prescription.pharmacist_id == active_pharmacist_id
@@ -57,7 +58,7 @@ def get_analytics(
 
         # Shift prescriptions: only by the currently logged-in pharmacist
         shift_prescriptions = db.query(Prescription).filter(
-            Prescription.prescription_date >= start_dt,
+            Prescription.prescription_date >= today_start,
             Prescription.prescription_date <= end_dt,
             Prescription.pharmacist_id == active_pharmacist_id
         ).count()
@@ -68,7 +69,7 @@ def get_analytics(
         verification_time = []
         num_intervals = 7
         for i in range(num_intervals):
-            interval_start = start_dt + timedelta(days=i)
+            interval_start = chart_start + timedelta(days=i)
             interval_end = interval_start + timedelta(days=1)
             label = interval_start.strftime("%a")
 
@@ -97,25 +98,25 @@ def get_analytics(
 
         alert_counts = {
             "interaction": db.query(Alert).join(Prescription).filter(
-                Prescription.prescription_date >= start_dt,
+                Prescription.prescription_date >= today_start,
                 Prescription.prescription_date <= end_dt,
                 Prescription.pharmacist_id == active_pharmacist_id,
                 Alert.alert_type == "interaction"
             ).count(),
             "dosage": db.query(Alert).join(Prescription).filter(
-                Prescription.prescription_date >= start_dt,
+                Prescription.prescription_date >= today_start,
                 Prescription.prescription_date <= end_dt,
                 Prescription.pharmacist_id == active_pharmacist_id,
                 Alert.alert_type == "dosage"
             ).count(),
             "contraindication": db.query(Alert).join(Prescription).filter(
-                Prescription.prescription_date >= start_dt,
+                Prescription.prescription_date >= today_start,
                 Prescription.prescription_date <= end_dt,
                 Prescription.pharmacist_id == active_pharmacist_id,
                 Alert.alert_type == "contraindication"
             ).count(),
             "duplicate": db.query(Alert).join(Prescription).filter(
-                Prescription.prescription_date >= start_dt,
+                Prescription.prescription_date >= today_start,
                 Prescription.prescription_date <= end_dt,
                 Prescription.pharmacist_id == active_pharmacist_id,
                 Alert.alert_type == "duplicate"

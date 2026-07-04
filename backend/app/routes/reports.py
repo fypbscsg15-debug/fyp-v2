@@ -88,6 +88,13 @@ def generate_report(
         spaceBefore=8,
         spaceAfter=4
     )
+    cell_style = ParagraphStyle(
+        "TableCell",
+        parent=styles["Normal"],
+        fontSize=8,
+        leading=10,
+        textColor=colors.HexColor("#334155")
+    )
 
     from ..models.user import Pharmacist
 
@@ -148,18 +155,19 @@ def generate_report(
         px_list = px_query.order_by(Prescription.prescription_date.desc()).all()
         if px_list:
             story.append(Paragraph("Prescription Activity Details", h3_style))
-            details_data = [["Date/Time", "Patient", "Status", "Medicines"]]
+            details_data = [["Date/Time", "Patient Name", "Pharmacist", "Medicine Names"]]
             for p in px_list[:20]:
                 local_date = p.prescription_date.replace(tzinfo=timezone.utc).astimezone()
                 patient_name = p.patient.name if p.patient else "Anonymous"
+                pharmacist_name = p.pharmacist.name if p.pharmacist else "System"
                 meds_names = ", ".join([d.drug_name_raw for d in p.drugs])
                 details_data.append([
                     local_date.strftime("%Y-%m-%d %H:%M:%S"),
                     patient_name,
-                    p.status.capitalize(),
-                    (meds_names[:45] + "...") if len(meds_names) > 45 else meds_names
+                    pharmacist_name,
+                    Paragraph(meds_names, cell_style)
                 ])
-            px_table = Table(details_data, colWidths=[110, 90, 70, 210])
+            px_table = Table(details_data, colWidths=[100, 90, 90, 200])
             px_table.setStyle(TableStyle([
                 ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#f8fafc")),
                 ('TEXTCOLOR', (0,0), (-1,0), colors.HexColor("#334155")),
@@ -249,12 +257,13 @@ def generate_report(
         logs_list = audit_query.order_by(AuditLog.timestamp.desc()).all()
         
         if logs_list:
-            data = [["Date/Time", "Action", "Details"]]
+            data = [["Date/Time", "User", "Action", "Details"]]
             for item in logs_list[:20]:
                 data.append([
                     item.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                    item.user or "—",
                     item.action or "—",
-                    (item.details[:40] + "...") if item.details and len(item.details) > 40 else (item.details or "—")
+                    Paragraph(item.details or "—", cell_style)
                 ])
         else:
             data = [
@@ -262,7 +271,7 @@ def generate_report(
                 ["No activities logged for the selected criteria."]
             ]
             
-        t = Table(data, colWidths=[110, 110, 260] if logs_list else [480])
+        t = Table(data, colWidths=[100, 80, 100, 200] if logs_list else [480])
         t.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#f1f5f9")),
             ('TEXTCOLOR', (0,0), (-1,0), colors.HexColor("#0f172a")),

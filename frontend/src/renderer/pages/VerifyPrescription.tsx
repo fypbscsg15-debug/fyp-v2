@@ -119,7 +119,6 @@ const VerifyPrescription = () => {
               <AlertCard
                 key={a.id}
                 alert={a}
-                onViewDetails={() => toast.info(a.title)}
                 onOverride={() => {
                   resolveOne(a.id, a.title || a.description);
                   if (id && id !== "rx_1023" && id !== "rx_ocr") {

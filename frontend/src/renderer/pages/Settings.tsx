@@ -95,10 +95,8 @@ export default function Settings() {
         <TabsList className="flex w-full flex-wrap justify-start overflow-x-auto">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
-          <TabsTrigger value="drugdb">Drug Database</TabsTrigger>
           <TabsTrigger value="alerts">Alert Rules</TabsTrigger>
           <TabsTrigger value="language">Language</TabsTrigger>
-          <TabsTrigger value="system">System</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="card-elevated mt-4 space-y-4 p-5">
@@ -142,14 +140,7 @@ export default function Settings() {
           </div>
         </TabsContent>
 
-        <TabsContent value="drugdb" className="card-elevated mt-4 space-y-3 p-5">
-          <h3 className="font-semibold">Drug Database</h3>
-          <p className="text-sm text-muted-foreground">Last updated: April 12, 2025 · 24,512 entries</p>
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => toast.success("Connecting to master database... Drugs imported!")}><Upload className="mr-2 h-4 w-4" /> Import Database</Button>
-            <Button variant="outline" onClick={() => toast.success("Database is up to date!")}><RefreshCcw className="mr-2 h-4 w-4" /> Check for Updates</Button>
-          </div>
-        </TabsContent>
+
 
         <TabsContent value="alerts" className="card-elevated mt-4 space-y-4 p-5">
           <h3 className="font-semibold">Alert Severity Thresholds</h3>
@@ -189,18 +180,7 @@ export default function Settings() {
           </div>
         </TabsContent>
 
-        <TabsContent value="system" className="card-elevated mt-4 space-y-4 p-5">
-          <h3 className="font-semibold">System</h3>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Button variant="outline" onClick={() => toast.success("Full system backup complete!")}><Database className="mr-2 h-4 w-4" /> Backup System</Button>
-            <Button variant="outline" onClick={() => toast.info("Opening recovery wizard...")}><RefreshCcw className="mr-2 h-4 w-4" /> Restore</Button>
-          </div>
-          <div className="rounded-lg border bg-muted/30 p-4 text-sm mt-4">
-            <p className="font-semibold">SPSS — Smart Pharmacist Support System</p>
-            <p className="text-xs text-muted-foreground">Desktop License Version 1.0.0 · Build 20250426</p>
-            <p className="mt-2 text-xs text-muted-foreground">© 2025 SPSS Health. All rights reserved.</p>
-          </div>
-        </TabsContent>
+
       </Tabs>
 
       {/* Add User Modal */}
