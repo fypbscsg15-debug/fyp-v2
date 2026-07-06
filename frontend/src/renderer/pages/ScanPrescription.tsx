@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
-import { UploadCloud, ScanLine, Camera, RotateCw, Crop, X, Loader2 } from "lucide-react";
+import { UploadCloud, ScanLine, Camera, RotateCw, Crop, X, Loader2, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { apiEndpoints } from "@/services/api";
@@ -14,6 +14,12 @@ const ScanPrescription = () => {
   const [preview, setPreview] = useState<string>("");
   const [rotation, setRotation] = useState(0);
   const [processing, setProcessing] = useState(false);
+
+  const handleManualEntry = () => {
+    sessionStorage.removeItem("spss_scan_session");
+    sessionStorage.removeItem("spss_review_form");
+    navigate("/ocr-review");
+  };
 
   useEffect(() => {
     const activeSession = sessionStorage.getItem("spss_scan_session");
@@ -102,6 +108,9 @@ const ScanPrescription = () => {
               </Button>
               <Button variant="outline" onClick={() => toast.info("Camera capture: connect device camera in production")}>
                 <Camera className="mr-2 h-4 w-4" /> Use Camera
+              </Button>
+              <Button variant="outline" onClick={handleManualEntry}>
+                <FileText className="mr-2 h-4 w-4" /> Manual Entry
               </Button>
             </div>
           </>

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiEndpoints } from "@/services/api";
-import { FileText, Download, FileSpreadsheet, Mail, Loader2, AlertOctagon } from "lucide-react";
+import { FileText, Download, Loader2, AlertOctagon } from "lucide-react";
 import { toast } from "sonner";
 
 const REPORT_TYPES = [
@@ -151,8 +151,6 @@ const Reports = () => {
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Preview</h3>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" disabled={!generated} onClick={downloadPDF}><Download className="mr-1.5 h-3.5 w-3.5" /> PDF</Button>
-              <Button size="sm" variant="outline" disabled={!generated} onClick={() => toast.success("CSV downloaded")}><FileSpreadsheet className="mr-1.5 h-3.5 w-3.5" /> CSV</Button>
-              <Button size="sm" variant="outline" disabled={!generated} onClick={() => toast.success("Report emailed")}><Mail className="mr-1.5 h-3.5 w-3.5" /> Email</Button>
             </div>
           </div>
 

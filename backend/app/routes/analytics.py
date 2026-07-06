@@ -37,20 +37,20 @@ def get_analytics(
         active_pharmacist_id = active_db_user.pharmacist_id if active_db_user else current_user.pharmacist_id
 
         total_prescriptions = db.query(Prescription).filter(
-            Prescription.prescription_date >= today_start,
+            Prescription.prescription_date >= chart_start,
             Prescription.prescription_date <= end_dt,
             Prescription.pharmacist_id == active_pharmacist_id
         ).count()
 
         total_errors = db.query(Prescription).filter(
-            Prescription.prescription_date >= today_start,
+            Prescription.prescription_date >= chart_start,
             Prescription.prescription_date <= end_dt,
             Prescription.status == "error",
             Prescription.pharmacist_id == active_pharmacist_id
         ).count()
 
         pending_prescriptions = db.query(Prescription).filter(
-            Prescription.prescription_date >= today_start,
+            Prescription.prescription_date >= chart_start,
             Prescription.prescription_date <= end_dt,
             Prescription.status == "pending",
             Prescription.pharmacist_id == active_pharmacist_id
@@ -58,7 +58,7 @@ def get_analytics(
 
         # Shift prescriptions: only by the currently logged-in pharmacist
         shift_prescriptions = db.query(Prescription).filter(
-            Prescription.prescription_date >= today_start,
+            Prescription.prescription_date >= chart_start,
             Prescription.prescription_date <= end_dt,
             Prescription.pharmacist_id == active_pharmacist_id
         ).count()
@@ -98,25 +98,25 @@ def get_analytics(
 
         alert_counts = {
             "interaction": db.query(Alert).join(Prescription).filter(
-                Prescription.prescription_date >= today_start,
+                Prescription.prescription_date >= chart_start,
                 Prescription.prescription_date <= end_dt,
                 Prescription.pharmacist_id == active_pharmacist_id,
                 Alert.alert_type == "interaction"
             ).count(),
             "dosage": db.query(Alert).join(Prescription).filter(
-                Prescription.prescription_date >= today_start,
+                Prescription.prescription_date >= chart_start,
                 Prescription.prescription_date <= end_dt,
                 Prescription.pharmacist_id == active_pharmacist_id,
                 Alert.alert_type == "dosage"
             ).count(),
             "contraindication": db.query(Alert).join(Prescription).filter(
-                Prescription.prescription_date >= today_start,
+                Prescription.prescription_date >= chart_start,
                 Prescription.prescription_date <= end_dt,
                 Prescription.pharmacist_id == active_pharmacist_id,
                 Alert.alert_type == "contraindication"
             ).count(),
             "duplicate": db.query(Alert).join(Prescription).filter(
-                Prescription.prescription_date >= today_start,
+                Prescription.prescription_date >= chart_start,
                 Prescription.prescription_date <= end_dt,
                 Prescription.pharmacist_id == active_pharmacist_id,
                 Alert.alert_type == "duplicate"

@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import jsPDF from "jspdf";
 
-type SendChannel = "sms" | "whatsapp" | "email" | "print";
+type SendChannel = "whatsapp" | "email" | "print";
 
 const translateTimingToUrdu = (frequency: string = "", duration: string = ""): string => {
   const freq = frequency.toLowerCase().trim();
@@ -23,24 +23,30 @@ const translateTimingToUrdu = (frequency: string = "", duration: string = ""): s
 
   // 1. Translate frequency
   let freqUrdu = frequency;
-  if (freq === "once daily" || freq === "1x/day" || freq === "1/day" || freq === "once a day" || freq === "1 time a day") {
+  if (/^once\s+daily$|^1x\/day$|^1\/day$|^once\s+a\s+day$|^1\s+time\s+a\s+day$|^1\s+time\s+daily$|^1\s+times\s+daily$|^1\s+x\s+daily$/.test(freq)) {
     freqUrdu = "روزانہ ایک بار";
-  } else if (freq === "twice daily" || freq === "2x/day" || freq === "2/day" || freq === "twice a day" || freq === "2 times a day") {
+  } else if (/^twice\s+daily$|^2x\/day$|^2\/day$|^twice\s+a\s+day$|^2\s+times\s+a\s+day$|^2\s+time\s+daily$|^2\s+times\s+daily$|^2\s+x\s+daily$/.test(freq)) {
     freqUrdu = "روزانہ دو بار";
-  } else if (freq === "three times daily" || freq === "3x/day" || freq === "3/day" || freq === "three times a day" || freq === "3 times a day") {
+  } else if (/^three\s+times\s+daily$|^3\s*x\/day$|^3\/day$|^three\s+times\s+a\s+day$|^3\s+times\s+a\s+day$|^3\s+time\s+daily$|^3\s+times\s+daily$|^3\s+x\s+daily$/.test(freq)) {
     freqUrdu = "روزانہ تین بار";
-  } else if (freq === "four times daily" || freq === "4x/day" || freq === "4/day" || freq === "four times a day" || freq === "4 times a day") {
+  } else if (/^four\s+times\s+daily$|^4\s*x\/day$|^4\/day$|^four\s+times\s+a\s+day$|^4\s+times\s+a\s+day$|^4\s+time\s+daily$|^4\s+times\s+daily$|^4\s+x\s+daily$/.test(freq)) {
     freqUrdu = "روزانہ چار بار";
-  } else if (freq === "five times daily" || freq === "5x/day" || freq === "5/day" || freq === "five times a day" || freq === "5 times a day") {
+  } else if (/^five\s+times\s+daily$|^5\s*x\/day$|^5\/day$|^five\s+times\s+a\s+day$|^5\s+times\s+a\s+day$|^5\s+time\s+daily$|^5\s+times\s+daily$|^5\s+x\s+daily$/.test(freq)) {
     freqUrdu = "روزانہ پانچ بار";
-  } else if (freq === "as needed" || freq === "prn") {
+  } else if (freq === "as needed" || freq === "prn" || freq.includes("as needed") || freq.includes("prn")) {
     freqUrdu = "ضرورت پڑنے پر";
-  } else if (freq === "at bedtime" || freq === "bedtime") {
+  } else if (freq === "at bedtime" || freq === "bedtime" || freq.includes("bedtime")) {
     freqUrdu = "سوتے وقت";
-  } else if (freq === "weekly") {
+  } else if (freq === "weekly" || freq.includes("weekly")) {
     freqUrdu = "ہفتہ وار";
+  } else if (freq === "morning" || freq.includes("morning")) {
+    freqUrdu = "صبح";
+  } else if (freq === "afternoon" || freq.includes("afternoon")) {
+    freqUrdu = "دوپہر";
+  } else if (freq === "evening" || freq === "night" || freq.includes("evening") || freq.includes("night")) {
+    freqUrdu = "شام / رات";
   } else {
-    const hoursMatch = freq.match(/every\s+(\d+)\s+hours/);
+    const hoursMatch = freq.match(/every\s+(\d+)\s+hours/) || freq.match(/(\d+)\s*hourly/);
     if (hoursMatch) {
       freqUrdu = `ہر ${hoursMatch[1]} گھنٹے بعد`;
     }
@@ -205,11 +211,6 @@ ${rx.medicines.map((m: any, i: number) => `${i + 1}. ${m.name} ${m.dosage} — $
     } else if (channel === "print") {
       handlePrint();
       toast.success("Opening print dialog...");
-    } else if (channel === "sms") {
-      // Free SMS suggestion: Using the local device's SMS app protocol (works on mobile, and on Windows via Phone Link)
-      const url = `sms:${contact}?body=${encodeURIComponent(message)}`;
-      openExternal(url);
-      toast.success("Opening SMS application...");
     }
 
     setSendOpen(false);
@@ -232,7 +233,6 @@ ${rx.medicines.map((m: any, i: number) => `${i + 1}. ${m.name} ${m.dosage} — $
     { id: "whatsapp", label: "WhatsApp", Icon: Smartphone, placeholder: "+92 300 1234567", type: "tel" },
     { id: "email", label: "Email", Icon: Mail, placeholder: "patient@example.com", type: "email" },
     { id: "print", label: "Print (Physical Copy)", Icon: Printer, placeholder: "", type: "text" },
-    { id: "sms", label: "SMS (via local Device)", Icon: MessageSquare, placeholder: "+92 300 1234567", type: "tel" },
   ];
 
   return (
@@ -284,8 +284,8 @@ ${rx.medicines.map((m: any, i: number) => `${i + 1}. ${m.name} ${m.dosage} — $
         <div className="mt-6 space-y-5">
           {rx.medicines.map((m, i) => (
             <div key={m.id} className="rounded-lg border p-4">
-              <h3 className={cn("font-semibold text-foreground", lang === "ur" && "urdu text-right")}>
-                {i + 1}. {m.name} — {m.dosage}
+              <h3 className={cn("font-semibold text-foreground", lang === "ur" ? "urdu text-right" : "text-left")}>
+                <span dir="ltr">{i + 1}. {m.name} — {m.dosage}</span>
               </h3>
               <p className={cn("mt-1 text-sm", lang === "ur" && "urdu text-right")}>
                 <span className="font-medium">{t("Timing:", "وقت:")} </span>
@@ -324,7 +324,7 @@ ${rx.medicines.map((m: any, i: number) => `${i + 1}. ${m.name} ${m.dosage} — $
             <DialogDescription>Choose how you want to deliver these instructions.</DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-3 gap-2">
             {channels.map((c) => {
               const Icon = c.Icon;
               const active = channel === c.id;
@@ -339,7 +339,7 @@ ${rx.medicines.map((m: any, i: number) => `${i + 1}. ${m.name} ${m.dosage} — $
                   )}
                 >
                   <Icon className="h-5 w-5" />
-                  {c.id === "sms" ? "SMS" : c.id === "whatsapp" ? "WhatsApp" : c.id === "email" ? "Email" : "Print"}
+                  {c.id === "whatsapp" ? "WhatsApp" : c.id === "email" ? "Email" : "Print"}
                 </button>
               );
             })}

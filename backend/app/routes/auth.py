@@ -86,7 +86,7 @@ def create_pharmacist(body: PharmacistCreate, db: Session = Depends(get_db)):
     return p
 
 
-@router.get("/users", response_model=list[PharmacistResponse], dependencies=[Depends(get_current_user)])
+@router.get("/users", response_model=list[PharmacistResponse], dependencies=[Depends(require_admin)])
 def list_pharmacists(db: Session = Depends(get_db)):
     return db.query(Pharmacist).all()
 

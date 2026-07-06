@@ -91,54 +91,58 @@ export default function Settings() {
     <div className="mx-auto max-w-5xl">
       <PageHeader title="Settings" description="Manage your account, organization, and system preferences" />
 
-      <Tabs defaultValue="profile">
+      <Tabs defaultValue={user?.role === "admin" ? "profile" : "alerts"}>
         <TabsList className="flex w-full flex-wrap justify-start overflow-x-auto">
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="users">Users</TabsTrigger>
+          {user?.role === "admin" && <TabsTrigger value="profile">Profile</TabsTrigger>}
+          {user?.role === "admin" && <TabsTrigger value="users">Users</TabsTrigger>}
           <TabsTrigger value="alerts">Alert Rules</TabsTrigger>
           <TabsTrigger value="language">Language</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="profile" className="card-elevated mt-4 space-y-4 p-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5"><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Email / System ID</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Current Password</Label><Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>New Password</Label><Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></div>
-          </div>
-          <Button onClick={saveProfile}><Save className="mr-2 h-4 w-4" /> Save Profile</Button>
-        </TabsContent>
+        {user?.role === "admin" && (
+          <TabsContent value="profile" className="card-elevated mt-4 space-y-4 p-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5"><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Email / System ID</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Current Password</Label><Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>New Password</Label><Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></div>
+            </div>
+            <Button onClick={saveProfile}><Save className="mr-2 h-4 w-4" /> Save Profile</Button>
+          </TabsContent>
+        )}
 
-        <TabsContent value="users" className="card-elevated mt-4 p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-semibold">User Management <span className="ml-2 text-xs font-normal text-muted-foreground">(Admin only)</span></h3>
-            <Button size="sm" onClick={() => setAddOpen(true)}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add User</Button>
-          </div>
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/60 text-xs uppercase text-muted-foreground">
-                <tr><th className="p-3 text-left">Name</th><th className="p-3 text-left">Email</th><th className="p-3 text-left">Role</th><th className="p-3"></th></tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.pharmacist_id} className="border-t">
-                    <td className="p-3 font-medium">{u.name}</td>
-                    <td className="p-3 text-muted-foreground">{u.email}</td>
-                    <td className="p-3 text-xs capitalize">{u.role}</td>
-                    <td className="p-3 text-right">
-                      <Button size="icon" variant="ghost" onClick={() => handleDeleteUser(u.pharmacist_id)} className="hover:bg-red-50 hover:text-red-500">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-                {users.length === 0 && (
-                  <tr><td colSpan={4} className="p-4 text-center text-muted-foreground">No users found.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </TabsContent>
+        {user?.role === "admin" && (
+          <TabsContent value="users" className="card-elevated mt-4 p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-semibold">User Management <span className="ml-2 text-xs font-normal text-muted-foreground">(Admin only)</span></h3>
+              <Button size="sm" onClick={() => setAddOpen(true)}><Plus className="mr-1.5 h-3.5 w-3.5" /> Add User</Button>
+            </div>
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/60 text-xs uppercase text-muted-foreground">
+                  <tr><th className="p-3 text-left">Name</th><th className="p-3 text-left">Email</th><th className="p-3 text-left">Role</th><th className="p-3"></th></tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.pharmacist_id} className="border-t">
+                      <td className="p-3 font-medium">{u.name}</td>
+                      <td className="p-3 text-muted-foreground">{u.email}</td>
+                      <td className="p-3 text-xs capitalize">{u.role}</td>
+                      <td className="p-3 text-right">
+                        <Button size="icon" variant="ghost" onClick={() => handleDeleteUser(u.pharmacist_id)} className="hover:bg-red-50 hover:text-red-500">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {users.length === 0 && (
+                    <tr><td colSpan={4} className="p-4 text-center text-muted-foreground">No users found.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </TabsContent>
+        )}
 
 
 

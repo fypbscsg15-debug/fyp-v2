@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Trash2, Plus, ShieldCheck, ScanLine, Loader2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiEndpoints } from "@/services/api";
+import { cn } from "@/lib/utils";
 
 type OcrLine = { text: string; confidence: number };
 
@@ -315,8 +316,8 @@ const OCRReview = () => {
   return (
     <div className="mx-auto max-w-7xl">
       <PageHeader
-        title="OCR Extraction Review"
-        description="Verify extracted data before running clinical safety checks"
+        title={isRealData ? "OCR Extraction Review" : "Manual Prescription Entry"}
+        description={isRealData ? "Verify extracted data before running clinical safety checks" : "Manually enter patient and medication details to run safety checks"}
         actions={
           <div className="hidden items-center gap-2 sm:flex">
             <Button variant="outline" onClick={() => {
@@ -324,11 +325,13 @@ const OCRReview = () => {
               sessionStorage.removeItem("spss_review_form");
               navigate("/scan");
             }}>
-              <ScanLine className="mr-2 h-4 w-4" /> Rescan
+              <ScanLine className="mr-2 h-4 w-4" /> {isRealData ? "Rescan" : "Scan Prescription"}
             </Button>
-            <Button variant="outline" onClick={handleAutoFill} disabled={!isRealData}>
-              <Wand2 className="mr-2 h-4 w-4" /> Auto-fill
-            </Button>
+            {isRealData && (
+              <Button variant="outline" onClick={handleAutoFill}>
+                <Wand2 className="mr-2 h-4 w-4" /> Auto-fill
+              </Button>
+            )}
             <Button onClick={handleConfirm} disabled={verifying}>
               {verifying
                 ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Checking...</>
@@ -338,43 +341,35 @@ const OCRReview = () => {
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Left — image + extracted text lines */}
-        <div className="card-elevated p-4 space-y-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Original Prescription
-          </p>
-          <div className="flex min-h-[200px] items-center justify-center rounded-lg bg-muted">
-            <img src={imageUrl} alt="Prescription" className="max-h-[300px] object-contain" />
-          </div>
-
-          {isRealData && (
-            <>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Extracted Text Lines ({ocrLines.length})
-              </p>
-              <div className="max-h-[280px] overflow-y-auto rounded-lg border divide-y text-sm">
-                {ocrLines.map((line, i) => (
-                  <div key={i} className="flex items-center justify-between gap-3 px-3 py-2">
-                    <span className="flex-1 break-words">{line.text}</span>
-                    <Badge
-                      variant={line.confidence >= 0.85 ? "default" : "secondary"}
-                      className="shrink-0 text-xs"
-                    >
-                      {Math.round(line.confidence * 100)}%
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {!isRealData && (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No OCR data — upload a prescription from the Scan page.
+      <div className={cn("grid gap-6", isRealData ? "lg:grid-cols-2" : "grid-cols-1 max-w-3xl mx-auto")}>
+        {/* Left — image + extracted text lines (only shown if we have OCR data) */}
+        {isRealData && (
+          <div className="card-elevated p-4 space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Original Prescription
             </p>
-          )}
-        </div>
+            <div className="flex min-h-[200px] items-center justify-center rounded-lg bg-muted">
+              <img src={imageUrl} alt="Prescription" className="max-h-[300px] object-contain" />
+            </div>
+
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Extracted Text Lines ({ocrLines.length})
+            </p>
+            <div className="max-h-[280px] overflow-y-auto rounded-lg border divide-y text-sm">
+              {ocrLines.map((line, i) => (
+                <div key={i} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <span className="flex-1 break-words">{line.text}</span>
+                  <Badge
+                    variant={line.confidence >= 0.85 ? "default" : "secondary"}
+                    className="shrink-0 text-xs"
+                  >
+                    {Math.round(line.confidence * 100)}%
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Right — structured form */}
         <div className="card-elevated p-5">

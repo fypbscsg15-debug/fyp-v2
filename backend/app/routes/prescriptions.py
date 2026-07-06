@@ -15,6 +15,7 @@ from ..models.alert import Alert
 from ..models.staff_shift import StaffShift
 from ..models.audit_log import AuditLog
 from ..models.user import Pharmacist
+from ..models.inventory import Inventory
 from ..schemas.schemas import InteractionCheckResponse
 from ..utils.auth import get_current_user
 from ..utils.drug_interaction import check_drug_interactions
@@ -416,9 +417,60 @@ def dispense_prescription(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
+    import re
+    def estimate_dispensed_quantity(frequency: str, duration: str) -> int:
+        if not frequency or not duration:
+            return 10  # fallback default
+        
+        # 1. Parse frequency
+        freq_val = 1
+        freq = frequency.lower().strip()
+        if any(x in freq for x in ["once", "1x", "1/day", "once a day", "1 time a day", "1 time daily", "1 times daily", "1x daily"]):
+            freq_val = 1
+        elif any(x in freq for x in ["twice", "2x", "2/day", "twice a day", "2 times a day", "2 time daily", "2 times daily", "2x daily"]):
+            freq_val = 2
+        elif any(x in freq for x in ["three", "3x", "3/day", "three times a day", "3 times a day", "3 time daily", "3 times daily", "3x daily"]):
+            freq_val = 3
+        elif any(x in freq for x in ["four", "4x", "4/day", "four times a day", "4 times a day", "4 time daily", "4 times daily", "4x daily"]):
+            freq_val = 4
+        elif any(x in freq for x in ["five", "5x", "5/day", "five times a day", "5 times a day", "5 time daily", "5 times daily", "5x daily"]):
+            freq_val = 5
+            
+        # 2. Parse duration
+        dur_val = 1
+        dur = duration.lower().strip()
+        match_digits = re.search(r'\d+', dur)
+        if match_digits:
+            num = int(match_digits.group())
+            if "week" in dur:
+                dur_val = num * 7
+            elif "month" in dur:
+                dur_val = num * 30
+            else:
+                dur_val = num
+        else:
+            if "week" in dur:
+                dur_val = 7
+            elif "month" in dur:
+                dur_val = 30
+            else:
+                dur_val = 7  # default to 7 days
+                
+        qty = freq_val * dur_val
+        return qty if qty > 0 else 10
+
     rx = db.query(Prescription).filter(Prescription.prescription_id == prescription_id).first()
     if rx:
         rx.status = "dispensed"
+        
+        # Deduct quantity from inventory
+        for rx_drug in rx.drugs:
+            if rx_drug.drug_id:
+                inv = db.query(Inventory).filter(Inventory.drug_id == rx_drug.drug_id).first()
+                if inv:
+                    qty = rx_drug.quantity_dispensed or estimate_dispensed_quantity(rx_drug.frequency, rx_drug.duration)
+                    inv.quantity_in_stock = max(0, inv.quantity_in_stock - qty)
+                    rx_drug.quantity_dispensed = qty
         db.commit()
 
     shift = db.query(StaffShift).filter(
