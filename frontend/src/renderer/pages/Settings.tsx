@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { Save, Upload, Plus, Trash2, RefreshCcw, Database } from "lucide-react";
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, staffRole } = useAuth();
   const [name, setName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -29,13 +29,15 @@ export default function Settings() {
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserRole, setNewUserRole] = useState("Pharmacist");
 
+  const isShiftAdmin = staffRole?.toLowerCase() === "admin";
+
   useEffect(() => {
-    if (user?.role === "admin") {
+    if (isShiftAdmin) {
       apiEndpoints.listUsers()
         .then((res) => setUsers(res.data))
         .catch(() => toast.error("Failed to load users"));
     }
-  }, [user?.role]);
+  }, [isShiftAdmin]);
 
   const saveProfile = async () => {
     if (currentPassword && newPassword) {
@@ -91,15 +93,15 @@ export default function Settings() {
     <div className="mx-auto max-w-5xl">
       <PageHeader title="Settings" description="Manage your account, organization, and system preferences" />
 
-      <Tabs defaultValue={user?.role === "admin" ? "profile" : "alerts"}>
+      <Tabs defaultValue={isShiftAdmin ? "profile" : "alerts"}>
         <TabsList className="flex w-full flex-wrap justify-start overflow-x-auto">
-          {user?.role === "admin" && <TabsTrigger value="profile">Profile</TabsTrigger>}
-          {user?.role === "admin" && <TabsTrigger value="users">Users</TabsTrigger>}
+          {isShiftAdmin && <TabsTrigger value="profile">Profile</TabsTrigger>}
+          {isShiftAdmin && <TabsTrigger value="users">Users</TabsTrigger>}
           <TabsTrigger value="alerts">Alert Rules</TabsTrigger>
           <TabsTrigger value="language">Language</TabsTrigger>
         </TabsList>
 
-        {user?.role === "admin" && (
+        {isShiftAdmin && (
           <TabsContent value="profile" className="card-elevated mt-4 space-y-4 p-5">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5"><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
@@ -111,7 +113,7 @@ export default function Settings() {
           </TabsContent>
         )}
 
-        {user?.role === "admin" && (
+        {isShiftAdmin && (
           <TabsContent value="users" className="card-elevated mt-4 p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="font-semibold">User Management <span className="ml-2 text-xs font-normal text-muted-foreground">(Admin only)</span></h3>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,39 @@ export const StaffUnlock = () => {
   const { setStaffSession, user, logout } = useAuth();
   const [name, setName] = useState("");
   const [role, setRole] = useState("Pharmacist");
+  const [password, setPassword] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      const trimmedName = name.trim();
+      if (trimmedName.length >= 2) {
+        apiEndpoints.checkStaffRole(trimmedName)
+          .then((res) => {
+            if (res.data?.role === "admin") {
+              setIsAdmin(true);
+              setRole("Admin");
+            } else {
+              setIsAdmin(false);
+              setRole("Pharmacist");
+              setPassword("");
+            }
+          })
+          .catch(() => {
+            setIsAdmin(false);
+            setRole("Pharmacist");
+            setPassword("");
+          });
+      } else {
+        setIsAdmin(false);
+        setRole("Pharmacist");
+        setPassword("");
+      }
+    }, 400);
+
+    return () => clearTimeout(delayDebounce);
+  }, [name]);
 
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,8 +51,16 @@ export const StaffUnlock = () => {
       setError("Please enter a valid name");
       return;
     }
+    if (isAdmin && !password) {
+      setError("Please enter your password");
+      return;
+    }
     try {
-      const res = await apiEndpoints.startShift({ staff_name: name.trim(), staff_role: role });
+      const res = await apiEndpoints.startShift({ 
+        staff_name: name.trim(), 
+        staff_role: role,
+        password: isAdmin ? password : undefined
+      });
       const shift = res.data;
       setStaffSession(name.trim(), role, shift.shift_id);
     } catch (err: any) {
@@ -64,17 +104,34 @@ export const StaffUnlock = () => {
               />
             </div>
 
-            <div className="space-y-2 text-left">
-              <Label htmlFor="staffRole">Staff Role</Label>
-              <Select value={role} onValueChange={setRole}>
-                <SelectTrigger id="staffRole" className="w-full text-lg">
-                  <SelectValue placeholder="Select Role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Pharmacist">Pharmacist</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {!isAdmin && (
+              <div className="space-y-2 text-left">
+                <Label htmlFor="staffRole">Staff Role</Label>
+                <Select value={role} onValueChange={setRole}>
+                  <SelectTrigger id="staffRole" className="w-full text-lg">
+                    <SelectValue placeholder="Select Role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Pharmacist">Pharmacist</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {isAdmin && (
+              <div className="space-y-2 text-left animate-fade-in">
+                <Label htmlFor="staffPassword">Admin Password</Label>
+                <Input
+                  id="staffPassword"
+                  type="password"
+                  placeholder="••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="text-lg"
+                  autoFocus
+                />
+              </div>
+            )}
             {error && <p className="text-sm text-red-500 text-left">{error}</p>}
             
             <Button size="lg" className="w-full font-medium" type="submit">

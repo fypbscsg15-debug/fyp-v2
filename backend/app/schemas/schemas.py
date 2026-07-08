@@ -275,6 +275,7 @@ class AnalyticsLogResponse(BaseModel):
 class StaffShiftStart(BaseModel):
     staff_name: str
     staff_role: str
+    password: Optional[str] = None
 
 
 class StaffShiftResponse(BaseModel):

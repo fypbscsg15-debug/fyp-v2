@@ -87,7 +87,8 @@ export const apiEndpoints = {
     api.get(`/analytics?range=${range}${start ? `&start=${start}` : ""}${end ? `&end=${end}` : ""}`),
   reports: (payload: any) => api.post("/reports", payload),
   auditLogs: (params?: any) => api.get("/audit-logs", { params }),
-  startShift: (payload: { staff_name: string; staff_role: string }) => api.post("/auth/shift/start", payload),
+  startShift: (payload: { staff_name: string; staff_role: string; password?: string }) => api.post("/auth/shift/start", payload),
+  checkStaffRole: (name: string) => api.get(`/auth/staff/check-role?name=${encodeURIComponent(name)}`),
   endShift: (shiftId: string) => api.post(`/auth/shift/end/${shiftId}`),
   checkDosage: (medicine: string, dose: string, age: string, apiKey?: string) =>
     api.post("/dosage/check", { medicine, dose, age, api_key: apiKey }),

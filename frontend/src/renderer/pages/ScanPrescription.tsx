@@ -7,6 +7,7 @@ import { UploadCloud, ScanLine, Camera, RotateCw, Crop, X, Loader2, FileText } f
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { apiEndpoints } from "@/services/api";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 
 const ScanPrescription = () => {
   const navigate = useNavigate();
@@ -14,6 +15,8 @@ const ScanPrescription = () => {
   const [preview, setPreview] = useState<string>("");
   const [rotation, setRotation] = useState(0);
   const [processing, setProcessing] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
   const handleManualEntry = () => {
     sessionStorage.removeItem("spss_scan_session");
@@ -39,9 +42,49 @@ const ScanPrescription = () => {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { "image/*": [".jpeg", ".jpg", ".png"] },
-    maxFiles: 1,
-    maxSize: 10 * 1024 * 1024,
   });
+
+  useEffect(() => {
+    let activeStream: MediaStream | null = null;
+    if (cameraOpen) {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        .then((s) => {
+          activeStream = s;
+          setStream(s);
+          const video = document.getElementById("camera-preview") as HTMLVideoElement;
+          if (video) video.srcObject = s;
+        })
+        .catch((err) => {
+          toast.error("Could not access camera: " + err.message);
+          setCameraOpen(false);
+        });
+    }
+    return () => {
+      if (activeStream) {
+        activeStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [cameraOpen]);
+
+  const capturePhoto = () => {
+    const video = document.getElementById("camera-preview") as HTMLVideoElement;
+    if (!video) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const capturedFile = new File([blob], "camera_capture.png", { type: "image/png" });
+        setFile(capturedFile);
+        setPreview(URL.createObjectURL(capturedFile));
+        setRotation(0);
+        setCameraOpen(false);
+      }
+    }, "image/png");
+  };
 
   const handleProcess = async () => {
     if (!file) return;
@@ -106,7 +149,7 @@ const ScanPrescription = () => {
               <Button variant="outline" onClick={() => toast.info("Scanner integration: connect via Electron IPC")}>
                 <ScanLine className="mr-2 h-4 w-4" /> Use Scanner
               </Button>
-              <Button variant="outline" onClick={() => toast.info("Camera capture: connect device camera in production")}>
+              <Button variant="outline" onClick={() => setCameraOpen(true)}>
                 <Camera className="mr-2 h-4 w-4" /> Use Camera
               </Button>
               <Button variant="outline" onClick={handleManualEntry}>
@@ -156,6 +199,34 @@ const ScanPrescription = () => {
           </div>
         )}
       </div>
+
+      <Dialog open={cameraOpen} onOpenChange={setCameraOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Capture Prescription Image</DialogTitle>
+            <DialogDescription>
+              Align the prescription within the camera view and click capture.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="relative aspect-video overflow-hidden rounded-lg bg-black">
+            <video
+              id="camera-preview"
+              autoPlay
+              playsInline
+              muted
+              className="h-full w-full object-cover"
+            />
+          </div>
+          <DialogFooter className="flex sm:justify-between">
+            <Button variant="outline" onClick={() => setCameraOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={capturePhoto}>
+              <Camera className="mr-2 h-4 w-4" /> Capture Photo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

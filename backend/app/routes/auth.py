@@ -115,12 +115,25 @@ def delete_pharmacist(pharmacist_id: str, db: Session = Depends(get_db)):
     return {"message": "Pharmacist deleted"}
 
 
+@router.get("/staff/check-role")
+def check_role(name: str, db: Session = Depends(get_db)):
+    staff = db.query(Pharmacist).filter(Pharmacist.name.ilike(name.strip())).first()
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not registered")
+    return {"role": staff.role}
+
+
 @router.post("/shift/start", response_model=StaffShiftResponse)
 def start_shift(body: StaffShiftStart, db: Session = Depends(get_db)):
     # Verify staff is registered in database
     staff = db.query(Pharmacist).filter(Pharmacist.name.ilike(body.staff_name.strip())).first()
     if not staff:
         raise HTTPException(status_code=400, detail="Error Staff Not Registered")
+
+    # If the staff member is an admin, verify their password
+    if staff.role == "admin":
+        if not body.password or not verify_password(body.password, staff.password_hash):
+            raise HTTPException(status_code=401, detail="Invalid admin password")
 
     shift = StaffShift(
         staff_name=staff.name,
