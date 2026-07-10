@@ -132,6 +132,8 @@ class InventoryCreate(BaseModel):
 
 
 class InventoryUpdate(BaseModel):
+    brand_name: Optional[str] = None
+    generic_name: Optional[str] = None
     quantity_in_stock: Optional[int] = None
     expiry_date: Optional[date] = None
     low_stock_threshold: Optional[int] = None

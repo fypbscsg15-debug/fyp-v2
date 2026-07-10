@@ -108,12 +108,13 @@ const Instructions = () => {
         } else {
           res = await apiEndpoints.getLatestPrescription();
         }
-        
+
         if (res.data) {
           setRx(res.data);
           // Log instruction generation
-          if (id && id !== "rx_1023" && id !== "rx_ocr") {
-            apiEndpoints.logInstructions(id).catch(console.error);
+          const realId = res.data.id;
+          if (realId && realId !== "rx_1023" && realId !== "rx_ocr") {
+            apiEndpoints.logInstructions(realId).catch(console.error);
           }
         } else {
           setRx(mockExtractedPrescription);
@@ -218,15 +219,18 @@ ${rx.medicines.map((m: any, i: number) => `${i + 1}. ${m.name} ${m.dosage} — $
   };
 
   const handleConfirmDispense = async () => {
+    const realId = rx?.id || id;
     try {
-      if (id && id !== "rx_1023" && id !== "rx_ocr") {
-        await apiEndpoints.dispensePrescription(id);
+      if (realId && realId !== "rx_1023" && realId !== "rx_ocr") {
+        await apiEndpoints.dispensePrescription(realId);
       }
       toast.success("Prescription marked as dispensed");
-    } catch (err) {
+      navigate(`/confirmation/${realId}`);
+    } catch (err: any) {
       console.error("Failed to log dispense:", err);
+      const errMsg = err.response?.data?.detail || "Failed to dispense. Check stock availability.";
+      toast.error(errMsg);
     }
-    navigate(`/confirmation/${id}`);
   };
 
   const channels: { id: SendChannel; label: string; Icon: any; placeholder: string; type: string }[] = [

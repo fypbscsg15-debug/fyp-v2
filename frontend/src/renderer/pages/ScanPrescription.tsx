@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -17,6 +17,15 @@ const ScanPrescription = () => {
   const [processing, setProcessing] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   const handleManualEntry = () => {
     sessionStorage.removeItem("spss_scan_session");
@@ -89,10 +98,12 @@ const ScanPrescription = () => {
   const handleProcess = async () => {
     if (!file) return;
     setProcessing(true);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await apiEndpoints.scanPrescription(formData);
+      const res = await apiEndpoints.scanPrescription(formData, { signal: controller.signal });
       const scanData = {
         ocrResults: res.data.results,
         filename: res.data.filename,
@@ -106,16 +117,24 @@ const ScanPrescription = () => {
         state: scanData,
       });
     } catch (err: any) {
+      if (err.name === "CanceledError" || err.code === "ERR_CANCELED") {
+        toast.info("OCR process cancelled");
+        return;
+      }
       const msg =
         err.response?.data?.detail ||
         (err.code === "ECONNABORTED" ? "OCR timed out — image may be too large" : "OCR failed. Is the OCR service running?");
       toast.error(msg);
     } finally {
       setProcessing(false);
+      abortControllerRef.current = null;
     }
   };
 
   const handleClear = () => {
+    if (processing && abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
     setFile(null);
     setPreview("");
     setRotation(0);
@@ -184,12 +203,12 @@ const ScanPrescription = () => {
 
             {processing && (
               <p className="mt-3 text-center text-sm text-muted-foreground">
-                Running OCR — this may take 10–30 seconds...
+                Running OCR
               </p>
             )}
 
             <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
-              <Button variant="outline" onClick={handleClear} disabled={processing}>Cancel</Button>
+              <Button variant="outline" onClick={handleClear}>Cancel</Button>
               <Button onClick={handleProcess} disabled={processing}>
                 {processing
                   ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing OCR...</>)

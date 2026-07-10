@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { mockInventory, InventoryItem } from "@/services/mockData";
 import { apiEndpoints } from "@/services/api";
-import { Search, Plus, Edit, AlertTriangle, Package } from "lucide-react";
+import { Search, Plus, Edit, Trash2, AlertTriangle, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -206,6 +206,8 @@ const Inventory = () => {
     }
     try {
       const payload = {
+        brand_name: editForm.name,
+        generic_name: editForm.generic,
         quantity_in_stock: Number(editForm.quantity),
         low_stock_threshold: Number(editForm.threshold) || 20,
         expiry_date: editForm.expiry || null,
@@ -233,6 +235,31 @@ const Inventory = () => {
       setItems(mapped);
     } catch (err) {
       toast.error("Failed to update medicine in database");
+    }
+  };
+
+  const handleDeleteClick = async (it: any) => {
+    if (window.confirm(`Are you sure you want to delete ${it.name}?`)) {
+      try {
+        await apiEndpoints.deleteInventory(it.id);
+        toast.success("Medicine deleted successfully");
+        const res = await apiEndpoints.inventory();
+        const mapped = res.data.map((item: any) => ({
+          id: item.inventory_id,
+          name: item.drug?.brand_name || "Unknown",
+          generic: item.drug?.generic_name || "Unknown",
+          batch: item.batch_number || "—",
+          quantity: item.quantity_in_stock,
+          threshold: item.low_stock_threshold,
+          expiry: item.expiry_date || "—",
+          location: item.location || "—",
+          category: item.category || "General",
+          unitPrice: item.unit_price || 0,
+        }));
+        setItems(mapped);
+      } catch (err) {
+        toast.error("Failed to delete medicine");
+      }
     }
   };
 
@@ -330,9 +357,14 @@ const Inventory = () => {
                     <td className="p-3 text-xs text-muted-foreground">{it.location}</td>
                     <td className="p-3 text-xs text-muted-foreground">{it.category}</td>
                     <td className="p-3 text-right">
-                      <Button size="icon" variant="ghost" onClick={() => handleEditClick(it)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button size="icon" variant="ghost" onClick={() => handleEditClick(it)} title="Edit">
+                          <Edit className="h-4 w-4 text-zinc-500 hover:text-zinc-700" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => handleDeleteClick(it)} title="Delete">
+                          <Trash2 className="h-4 w-4 text-red-500 hover:text-red-700" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -372,8 +404,8 @@ const Inventory = () => {
         <DialogContent>
           <DialogHeader><DialogTitle>Edit Medicine</DialogTitle></DialogHeader>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5 sm:col-span-2"><Label>Medicine Name</Label><Input value={editForm.name} disabled /></div>
-            <div className="space-y-1.5 sm:col-span-2"><Label>Generic Name</Label><Input value={editForm.generic} disabled /></div>
+            <div className="space-y-1.5 sm:col-span-2"><Label>Medicine Name</Label><Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /></div>
+            <div className="space-y-1.5 sm:col-span-2"><Label>Generic Name</Label><Input value={editForm.generic} onChange={(e) => setEditForm({ ...editForm, generic: e.target.value })} /></div>
             <div className="space-y-1.5"><Label>Quantity</Label><Input type="number" value={editForm.quantity} onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })} /></div>
             <div className="space-y-1.5"><Label>Low Stock Threshold</Label><Input type="number" value={editForm.threshold} onChange={(e) => setEditForm({ ...editForm, threshold: e.target.value })} /></div>
             <div className="space-y-1.5"><Label>Unit Price (Rs.)</Label><Input type="number" step="0.01" value={editForm.unitPrice} onChange={(e) => setEditForm({ ...editForm, unitPrice: e.target.value })} placeholder="e.g. 150" /></div>

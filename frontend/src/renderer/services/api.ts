@@ -47,10 +47,11 @@ export const apiEndpoints = {
   deleteUser: (id: string) => api.delete(`/auth/users/${id}`),
   changePassword: (current_password: string, new_password: string) =>
     api.post("/auth/change-password", { current_password, new_password }),
-  scanPrescription: (formData: FormData) =>
+  scanPrescription: (formData: FormData, config?: any) =>
     api.post("/prescriptions/scan", formData, {
       headers: { "Content-Type": "multipart/form-data" },
       timeout: 120000,
+      ...config,
     }),
   uploadPrescription: (formData: FormData) =>
     api.post("/prescriptions/upload", formData, { headers: { "Content-Type": "multipart/form-data" } }),
@@ -83,6 +84,7 @@ export const apiEndpoints = {
   inventory: () => api.get("/inventory"),
   createInventory: (payload: any) => api.post("/inventory", payload),
   updateInventory: (id: string, payload: any) => api.patch(`/inventory/${id}`, payload),
+  deleteInventory: (id: string) => api.delete(`/inventory/${id}`),
   analytics: (range: string, start?: string, end?: string) =>
     api.get(`/analytics?range=${range}${start ? `&start=${start}` : ""}${end ? `&end=${end}` : ""}`),
   reports: (payload: any) => api.post("/reports", payload),

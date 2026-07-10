@@ -59,8 +59,26 @@ def update_inventory_item(inventory_id: str, body: InventoryUpdate, db: Session 
     if body.quantity_in_stock is not None and body.quantity_in_stock > item.quantity_in_stock:
         item.last_restocked = datetime.now()
 
-    for k, v in body.model_dump(exclude_unset=True).items():
+    if body.brand_name is not None and item.drug:
+        item.drug.brand_name = body.brand_name
+    if body.generic_name is not None and item.drug:
+        item.drug.generic_name = body.generic_name
+
+    update_data = body.model_dump(exclude_unset=True)
+    update_data.pop("brand_name", None)
+    update_data.pop("generic_name", None)
+
+    for k, v in update_data.items():
         setattr(item, k, v)
     db.commit()
     db.refresh(item)
     return item
+
+@router.delete("/{inventory_id}")
+def delete_inventory_item(inventory_id: str, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    item = db.query(Inventory).filter(Inventory.inventory_id == inventory_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    db.delete(item)
+    db.commit()
+    return {"message": "Item deleted successfully"}
