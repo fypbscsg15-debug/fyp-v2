@@ -103,7 +103,7 @@ const Instructions = () => {
     const fetchPrescription = async () => {
       try {
         let res;
-        if (id && id !== "rx_1023" && id !== "rx_ocr") {
+        if (id && id !== "rx_1023" && id !== "rx_ocr" && id !== "latest") {
           res = await apiEndpoints.getPrescription(id);
         } else {
           res = await apiEndpoints.getLatestPrescription();

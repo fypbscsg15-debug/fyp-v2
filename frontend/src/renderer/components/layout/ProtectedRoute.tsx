@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { StaffUnlock } from "@/components/layout/StaffUnlock";
 
 export const ProtectedRoute = ({ children, adminOnly }: { children: ReactNode; adminOnly?: boolean }) => {
-  const { isAuthenticated, user, staffName, loading } = useAuth();
+  const { isAuthenticated, user, staffName, staffRole, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -23,7 +23,7 @@ export const ProtectedRoute = ({ children, adminOnly }: { children: ReactNode; a
     return <StaffUnlock />;
   }
 
-  if (adminOnly && user?.role !== "admin") {
+  if (adminOnly && staffRole?.toLowerCase() !== "admin") {
     return <Navigate to="/" replace />;
   }
 

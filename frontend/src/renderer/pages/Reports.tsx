@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiEndpoints } from "@/services/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { FileText, Download, Loader2, AlertOctagon } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,10 +18,13 @@ const REPORT_TYPES = [
 ];
 
 const Reports = () => {
+  const { staffRole, staffName } = useAuth();
+  const isShiftAdmin = staffRole?.toLowerCase() === "admin";
+
   const [selected, setSelected] = useState<string[]>(["prescription"]);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [pharmacist, setPharmacist] = useState("all");
+  const [pharmacist, setPharmacist] = useState(isShiftAdmin ? "all" : (staffName || "all"));
   const [severity, setSeverity] = useState("all");
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
@@ -28,10 +32,18 @@ const Reports = () => {
   const [users, setUsers] = useState<any[]>([]);
 
   useEffect(() => {
-    apiEndpoints.listUsers()
-      .then((res) => setUsers(res.data))
-      .catch((e) => console.error("Failed to load users", e));
-  }, []);
+    if (isShiftAdmin) {
+      apiEndpoints.listUsers()
+        .then((res) => setUsers(res.data))
+        .catch((e) => console.error("Failed to load users", e));
+    }
+  }, [isShiftAdmin]);
+
+  useEffect(() => {
+    if (!isShiftAdmin && staffName) {
+      setPharmacist(staffName);
+    }
+  }, [isShiftAdmin, staffName]);
 
   useEffect(() => {
     return () => {
@@ -118,15 +130,19 @@ const Reports = () => {
           <h3 className="mb-2 mt-5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Filters</h3>
           <div className="space-y-3">
             <div className="space-y-1"><Label className="text-xs">Pharmacist</Label>
-              <Select value={pharmacist} onValueChange={setPharmacist}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Pharmacists</SelectItem>
-                  {users.map((u) => (
-                    <SelectItem key={u.pharmacist_id || u.id} value={u.name}>{u.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {isShiftAdmin ? (
+                <Select value={pharmacist} onValueChange={setPharmacist}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Pharmacists</SelectItem>
+                    {users.map((u) => (
+                      <SelectItem key={u.pharmacist_id || u.id} value={u.name}>{u.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input value={staffName || ""} disabled className="bg-muted/40" />
+              )}
             </div>
             <div className="space-y-1"><Label className="text-xs">Alert Severity</Label>
               <Select value={severity} onValueChange={setSeverity}>

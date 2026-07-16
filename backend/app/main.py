@@ -201,7 +201,7 @@ def seed_database(db: Session = Depends(get_db)):
 
         rx = Prescription(
             patient_id=patient.patient_id,
-            pharmacist_id=p_ali.pharmacist_id,
+            pharmacist_id=p_qasim.pharmacist_id,
             status="verified",
             scan_image_path="/placeholder.svg",
             ocr_extracted_text="Ahmed Khan. Amoxicillin, Paracetamol."
@@ -231,12 +231,24 @@ def seed_database(db: Session = Depends(get_db)):
 @app.get("/audit-logs")
 def get_audit_logs(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     shift = db.query(StaffShift).filter(StaffShift.end_time == None).order_by(StaffShift.start_time.desc()).first()
-    active_user = shift.staff_name if shift else current_user.name
+    
+    is_admin = False
+    if shift:
+        if shift.staff_role.lower() == "admin":
+            is_admin = True
+        active_user = shift.staff_name
+    else:
+        if current_user.role == "admin":
+            is_admin = True
+        active_user = current_user.name
 
     logs = []
     
-    # Fetch from custom AuditLog entries (filter by user)
-    audit_entries = db.query(AuditLog).filter(AuditLog.user == active_user).all()
+    # Fetch from custom AuditLog entries (filter by user if not admin)
+    if is_admin:
+        audit_entries = db.query(AuditLog).all()
+    else:
+        audit_entries = db.query(AuditLog).filter(AuditLog.user == active_user).all()
     for l in audit_entries:
         # Convert UTC naive datetime to local timezone
         local_ts = l.timestamp.replace(tzinfo=timezone.utc).astimezone()

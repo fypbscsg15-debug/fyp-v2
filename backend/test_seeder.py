@@ -53,7 +53,25 @@ try:
         password_hash=hash_password("1234"),
         role="pharmacist",
     )
-    db.add_all([p_admin, p_ali])
+    p_qasim = Pharmacist(
+        name="Qasim",
+        email="qasim@spss.health",
+        password_hash=hash_password("1234"),
+        role="pharmacist",
+    )
+    p_hussain = Pharmacist(
+        name="Hussain",
+        email="hussain@spss.health",
+        password_hash=hash_password("1234"),
+        role="pharmacist",
+    )
+    p_rohaan = Pharmacist(
+        name="Rohaan",
+        email="rohaan@spss.health",
+        password_hash=hash_password("1234"),
+        role="pharmacist",
+    )
+    db.add_all([p_admin, p_ali, p_qasim, p_hussain, p_rohaan])
     db.commit()
 
     print("Inserting patient...")

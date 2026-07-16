@@ -178,7 +178,7 @@ def verify_prescription(
     rx = Prescription(
         patient_id=patient.patient_id,
         pharmacist_id=active_pharmacist_id,
-        status="error" if has_high else "verified",
+        status="pending" if len(alerts) > 0 else "verified",
         ocr_extracted_text=json.dumps(body.medicines),
         is_emergency=False
     )
@@ -223,11 +223,16 @@ def verify_prescription(
 
     # 4. Save Alerts
     for alert in alerts:
+        alert_data = {
+            "title": alert.get("title", ""),
+            "description": alert.get("description", ""),
+            "reference": alert.get("reference", "")
+        }
         db_alert = Alert(
             prescription_id=rx.prescription_id,
             alert_type=alert.get("category", "interaction"),
             severity=alert.get("severity", "medium"),
-            message=alert.get("title", "") + ": " + alert.get("description", ""),
+            message=json.dumps(alert_data),
             acknowledged=False,
             resolved=False
         )
@@ -254,9 +259,9 @@ def verify_prescription(
 
     audit = AuditLog(
         user=user_name,
-        action="Prescription Verified",
+        action="Prescription Verified" if len(alerts) == 0 else "Awaiting Verification",
         prescription_id=rx.prescription_id,
-        details=f"Verified prescription for patient: {body.patient_name or 'Anonymous Patient'}. Medicines: {', '.join(body.medicines)}"
+        details=f"Verified prescription for patient: {body.patient_name or 'Anonymous Patient'}. Medicines: {', '.join(body.medicines)}" if len(alerts) == 0 else f"Prescription scanned with alerts for patient: {body.patient_name or 'Anonymous Patient'}. Medicines: {', '.join(body.medicines)}"
     )
     db.add(audit)
     db.commit()
@@ -369,8 +374,15 @@ def get_latest_prescription(
     active_pharmacist_id = active_db_user.pharmacist_id if active_db_user else current_user.pharmacist_id
 
     rx = db.query(Prescription).filter(
-        Prescription.pharmacist_id == active_pharmacist_id
+        Prescription.pharmacist_id == active_pharmacist_id,
+        Prescription.status == "pending"
     ).order_by(Prescription.prescription_date.desc()).first()
+    
+    if not rx:
+        rx = db.query(Prescription).filter(
+            Prescription.pharmacist_id == active_pharmacist_id
+        ).order_by(Prescription.prescription_date.desc()).first()
+        
     if not rx:
         raise HTTPException(status_code=404, detail="No prescriptions found")
     
@@ -414,11 +426,49 @@ def get_prescription(
     if not rx:
         raise HTTPException(status_code=404, detail="Prescription not found")
     
+    parsed_alerts = []
+    for a in rx.alerts:
+        if a.resolved:
+            continue
+        
+        title = ""
+        description = ""
+        reference = ""
+        
+        if a.message and a.message.startswith("{"):
+            try:
+                alert_data = json.loads(a.message)
+                title = alert_data.get("title", "")
+                description = alert_data.get("description", "")
+                reference = alert_data.get("reference", "")
+            except Exception:
+                pass
+        
+        if not title:
+            if a.message and ": " in a.message:
+                parts = a.message.split(": ", 1)
+                title = parts[0]
+                description = parts[1]
+            else:
+                title = a.message or ""
+                description = a.message or ""
+
+        parsed_alerts.append({
+            "id": a.alert_id,
+            "severity": a.severity,
+            "category": a.alert_type,
+            "title": title,
+            "description": description,
+            "reference": reference,
+            "resolved": a.resolved
+        })
+
     return {
         "id": rx.prescription_id,
         "patientName": rx.patient.name,
         "patientAge": rx.patient.age,
         "patientGender": rx.patient.gender,
+        "alerts": parsed_alerts,
         "medicines": [
             {
                 "id": d.id,
@@ -523,14 +573,51 @@ def log_override(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user)
 ):
-    rx = db.query(Prescription).filter(Prescription.prescription_id == prescription_id).first()
-    if rx and body.action in ["Alert Resolved", "Override Alert"]:
-        rx.status = "verified"
-
     shift = db.query(StaffShift).filter(
         StaffShift.end_time == None
     ).order_by(StaffShift.start_time.desc()).first()
     user_name = shift.staff_name if shift else current_user.name
+
+    rx = db.query(Prescription).filter(Prescription.prescription_id == prescription_id).first()
+    if rx and body.action in ["Alert Resolved", "Override Alert"]:
+        if "Resolved all safety alerts" in body.details:
+            for alert in rx.alerts:
+                alert.resolved = True
+        else:
+            # Try to find a matching alert to resolve
+            for alert in rx.alerts:
+                alert_text = ""
+                if alert.message and alert.message.startswith("{"):
+                    try:
+                        alert_data = json.loads(alert.message)
+                        alert_text = alert_data.get("title", "") or alert_data.get("description", "")
+                    except Exception:
+                        pass
+                if not alert_text:
+                    alert_text = alert.message or ""
+                
+                # Check if this alert_text matches part of body.details
+                if alert_text and alert_text in body.details:
+                    alert.resolved = True
+                    break
+            else:
+                # Fallback: if there is only 1 unresolved alert left, resolve it
+                unresolved = [a for a in rx.alerts if not a.resolved]
+                if len(unresolved) == 1:
+                    unresolved[0].resolved = True
+        
+        # If all alerts resolved/overridden, change prescription status to verified
+        unresolved = [a for a in rx.alerts if not a.resolved]
+        if len(unresolved) == 0:
+            rx.status = "verified"
+            # Add an extra audit log to note that the prescription is verified
+            verification_audit = AuditLog(
+                user=user_name,
+                action="Prescription Verified",
+                prescription_id=prescription_id,
+                details=f"All safety alerts resolved/overridden. Prescription verified for patient: {rx.patient.name if rx.patient else 'Unknown'}."
+            )
+            db.add(verification_audit)
 
     audit = AuditLog(
         user=user_name,

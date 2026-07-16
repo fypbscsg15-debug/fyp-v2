@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -9,17 +9,67 @@ import { toast } from "sonner";
 import { CheckCheck, FileText } from "lucide-react";
 import { apiEndpoints } from "@/services/api";
 
+const applyAlertThresholds = (rawAlerts: SafetyAlert[]): SafetyAlert[] => {
+  const saved = localStorage.getItem("spss_alert_thresholds");
+  if (!saved) return rawAlerts;
+  try {
+    const thresholds = JSON.parse(saved);
+    return rawAlerts.map((a) => {
+      const overrideSeverity = thresholds[a.category];
+      if (overrideSeverity) {
+        return { ...a, severity: overrideSeverity };
+      }
+      return a;
+    });
+  } catch (e) {
+    return rawAlerts;
+  }
+};
+
 const VerifyPrescription = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const location = useLocation();
 
   const stateAlerts: SafetyAlert[] = (location.state as any)?.alerts ?? [];
-  const medicines: string[] = (location.state as any)?.medicines ?? [];
-  const isRealData = stateAlerts.length > 0 || medicines.length > 0;
+  const stateMedicines: string[] = (location.state as any)?.medicines ?? [];
+  const isRealData = stateAlerts.length > 0 || stateMedicines.length > 0;
 
-  const [alerts, setAlerts] = useState<SafetyAlert[]>(stateAlerts);
+  const [alerts, setAlerts] = useState<SafetyAlert[]>(() => applyAlertThresholds(stateAlerts));
+  const [medicines, setMedicines] = useState<string[]>(stateMedicines);
   const [tab, setTab] = useState<"all" | AlertCategory>("all");
+
+  useEffect(() => {
+    if (id) {
+      if (id === "latest") {
+        apiEndpoints.getLatestPrescription()
+          .then((res) => {
+            if (res.data && res.data.id) {
+              navigate(`/verify/${res.data.id}`, { replace: true });
+            }
+          })
+          .catch((err) => {
+            console.error("Failed to fetch latest prescription:", err);
+          });
+      } else if (id !== "rx_1023" && id !== "rx_ocr") {
+        apiEndpoints.getPrescription(id)
+          .then((res) => {
+            if (res.data) {
+              if (res.data.alerts) {
+                setAlerts(applyAlertThresholds(res.data.alerts));
+              }
+              if (res.data.medicines) {
+                const meds = res.data.medicines.map((m: any) => m.name);
+                setMedicines(meds);
+              }
+            }
+          })
+          .catch((err) => {
+            console.error("Failed to fetch prescription alerts:", err);
+          });
+      }
+    }
+  }, [id, navigate]);
 
   const counts = useMemo(() => ({
     total: alerts.length,

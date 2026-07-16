@@ -89,6 +89,27 @@ export default function Settings() {
   };
 
 
+  const [thresholds, setThresholds] = useState({
+    interaction: "medium",
+    dosage: "medium",
+    contraindication: "medium",
+    duplicate: "medium"
+  });
+
+  useEffect(() => {
+    const saved = localStorage.getItem("spss_alert_thresholds");
+    if (saved) {
+      try {
+        setThresholds(JSON.parse(saved));
+      } catch (e) {}
+    }
+  }, []);
+
+  const saveThresholds = () => {
+    localStorage.setItem("spss_alert_thresholds", JSON.stringify(thresholds));
+    toast.success("Alert rules saved!");
+  };
+
   return (
     <div className="mx-auto max-w-5xl">
       <PageHeader title="Settings" description="Manage your account, organization, and system preferences" />
@@ -150,10 +171,18 @@ export default function Settings() {
 
         <TabsContent value="alerts" className="card-elevated mt-4 space-y-4 p-5">
           <h3 className="font-semibold">Alert Severity Thresholds</h3>
-          {["Drug Interactions", "Dosage Errors", "Contraindications", "Duplicates"].map((cat) => (
-            <div key={cat} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
-              <span className="text-sm font-medium">{cat}</span>
-              <Select defaultValue="medium">
+          {[
+            { id: "interaction", label: "Drug Interactions" },
+            { id: "dosage", label: "Dosage Errors" },
+            { id: "contraindication", label: "Contraindications" },
+            { id: "duplicate", label: "Duplicates" }
+          ].map((cat) => (
+            <div key={cat.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+              <span className="text-sm font-medium">{cat.label}</span>
+              <Select 
+                value={thresholds[cat.id as keyof typeof thresholds]} 
+                onValueChange={(val) => setThresholds((p) => ({ ...p, [cat.id]: val }))}
+              >
                 <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="high">High</SelectItem>
@@ -163,7 +192,7 @@ export default function Settings() {
               </Select>
             </div>
           ))}
-          <Button onClick={() => toast.success("Alert rules saved!")}><Save className="mr-2 h-4 w-4" /> Save Rules</Button>
+          <Button onClick={saveThresholds}><Save className="mr-2 h-4 w-4" /> Save Rules</Button>
         </TabsContent>
 
         <TabsContent value="language" className="card-elevated mt-4 space-y-4 p-5">

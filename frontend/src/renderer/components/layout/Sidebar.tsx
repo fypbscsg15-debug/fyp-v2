@@ -5,12 +5,13 @@ import {
   BarChart3, FileBarChart, History, Settings, Pill, X, Scale
 } from "lucide-react";
 
+import { useAuth } from "@/contexts/AuthContext";
+
 const items = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/scan", label: "Scan Prescription", icon: ScanLine },
-  { to: "/verify/rx_1023", label: "Verify", icon: ShieldCheck },
-  { to: "/dosage-checker", label: "Dosage Checker", icon: Scale },
-  { to: "/instructions/rx_1023", label: "Instructions", icon: FileText },
+  { to: "/verify/latest", label: "Verify", icon: ShieldCheck },
+  { to: "/instructions/latest", label: "Instructions", icon: FileText },
   { to: "/inventory", label: "Inventory", icon: Package },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/reports", label: "Reports", icon: FileBarChart },
@@ -20,6 +21,14 @@ const items = [
 
 export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
   const location = useLocation();
+  const { staffRole } = useAuth();
+
+  const visibleItems = items.filter((item) => {
+    if (item.to === "/settings") {
+      return staffRole?.toLowerCase() === "admin";
+    }
+    return true;
+  });
 
   return (
     <>
@@ -56,7 +65,7 @@ export const Sidebar = ({ open, onClose }: { open: boolean; onClose: () => void 
         </div>
 
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
-          {items.map((item) => {
+          {visibleItems.map((item) => {
             const Icon = item.icon;
             const active = item.end
               ? location.pathname === item.to

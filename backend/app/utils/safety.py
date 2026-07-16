@@ -212,8 +212,9 @@ def check_duplicate_medicines(
     db: Session
 ) -> List[Dict[str, Any]]:
     alerts = []
-    seen_generics = {}  # generic_name -> original input medicine name
     seen_exact = set()  # exact cleaned name
+    seen_rxcuis = {}   # rxcui -> original input medicine name
+    seen_generics = {}  # generic_name -> original input medicine name
     
     for i, med in enumerate(medicines):
         med_clean = med.strip().lower()
@@ -234,25 +235,75 @@ def check_duplicate_medicines(
             continue
         seen_exact.add(med_clean)
 
-        # 2. Check database for generic ingredient duplication
-        drug_rec = db.query(Drug).filter(
-            (Drug.brand_name.ilike(f"%{med.strip()}%")) | 
-            (Drug.generic_name.ilike(f"%{med.strip()}%"))
-        ).first()
+        # Helper to clean the name for RxNav / Database lookup
+        cleaned_name = re.sub(r"\d+\s*(mg|ml|mcg|g|iu|units?|tabs?|caps?|puffs?)\b", "", med, flags=re.IGNORECASE)
+        cleaned_name = re.sub(r"\b(tablet|capsule|injection|syrup|suspension|drops?|cream|gel|ointment|inhaler)\b", "", cleaned_name, flags=re.IGNORECASE)
+        cleaned_name = cleaned_name.strip()
+        if not cleaned_name:
+            cleaned_name = med.strip()
 
-        if drug_rec:
-            generic = drug_rec.generic_name.strip().lower()
-            if generic in seen_generics:
-                duplicate_with = seen_generics[generic]
-                alerts.append({
-                    "id": f"dup_generic_{i}_{med_clean.replace(' ', '_')}",
-                    "severity": "high",
-                    "category": "duplicate",
-                    "title": f"Duplicate Active Ingredient: {drug_rec.generic_name}",
-                    "description": f"Multiple prescriptions contain the same active ingredient ({drug_rec.generic_name}): prescribed as '{med.strip()}' and '{duplicate_with}'.",
-                    "reference": "Clinical Guideline: Duplicate therapy increases risk of adverse events."
-                })
-            else:
-                seen_generics[generic] = med.strip()
+        # 2. Try RxNav API Lookup
+        api_success = False
+        rxcui = None
+        try:
+            # Query for the RxCUI of the cleaned drug name
+            rxcui_url = f"https://rxnav.nlm.nih.gov/REST/rxcui.json?name={requests.utils.quote(cleaned_name)}"
+            rxcui_res = requests.get(rxcui_url, timeout=3).json()
+            rxnorm_ids = rxcui_res.get("idGroup", {}).get("rxnormId", [])
+            if rxnorm_ids:
+                rxcui = rxnorm_ids[0]
+                # Query related concepts to get the active ingredients (TTY = IN / MIN)
+                related_url = f"https://rxnav.nlm.nih.gov/REST/rxcui/{rxcui}/allrelated.json"
+                related_res = requests.get(related_url, timeout=3).json()
+                concept_groups = related_res.get("allRelatedGroup", {}).get("conceptGroup", [])
                 
+                # Extract ingredients
+                ingredients = []
+                for group in concept_groups:
+                    if group.get("tty") in ["IN", "MIN"]:
+                        for prop in group.get("conceptProperties", []):
+                            ingredients.append((prop.get("rxcui"), prop.get("name")))
+                
+                if ingredients:
+                    api_success = True
+                    for ing_cui, ing_name in ingredients:
+                        if ing_cui in seen_rxcuis:
+                            duplicate_with = seen_rxcuis[ing_cui]
+                            alerts.append({
+                                "id": f"dup_generic_{i}_{med_clean.replace(' ', '_')}",
+                                "severity": "high",
+                                "category": "duplicate",
+                                "title": f"Duplicate Active Ingredient: {ing_name.capitalize()}",
+                                "description": f"Multiple prescriptions contain the same active ingredient ({ing_name}): prescribed as '{med.strip()}' and '{duplicate_with}'.",
+                                "reference": "RxNorm: Duplicate therapy increases risk of adverse events."
+                            })
+                        else:
+                            seen_rxcuis[ing_cui] = med.strip()
+        except Exception:
+            # Fall back to local DB if API fails/timeouts
+            pass
+
+        # 3. Fallback to Local Database if API didn't resolve anything
+        if not api_success:
+            # Check database for generic ingredient duplication using the cleaned name
+            drug_rec = db.query(Drug).filter(
+                (Drug.brand_name.ilike(f"%{cleaned_name}%")) | 
+                (Drug.generic_name.ilike(f"%{cleaned_name}%"))
+            ).first()
+
+            if drug_rec:
+                generic = drug_rec.generic_name.strip().lower()
+                if generic in seen_generics:
+                    duplicate_with = seen_generics[generic]
+                    alerts.append({
+                        "id": f"dup_generic_{i}_{med_clean.replace(' ', '_')}",
+                        "severity": "high",
+                        "category": "duplicate",
+                        "title": f"Duplicate Active Ingredient: {drug_rec.generic_name}",
+                        "description": f"Multiple prescriptions contain the same active ingredient ({drug_rec.generic_name}): prescribed as '{med.strip()}' and '{duplicate_with}'.",
+                        "reference": "Clinical Guideline: Duplicate therapy increases risk of adverse events."
+                    })
+                else:
+                    seen_generics[generic] = med.strip()
+
     return alerts

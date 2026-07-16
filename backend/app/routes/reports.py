@@ -12,6 +12,8 @@ from ..models.inventory import Inventory
 from ..models.audit_log import AuditLog
 from ..utils.auth import get_current_user
 
+from ..models.staff_shift import StaffShift
+
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 class ReportRequest(BaseModel):
@@ -27,6 +29,20 @@ def generate_report(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    # ── Role-based enforcement: staff can only report on themselves ──
+    shift = db.query(StaffShift).filter(StaffShift.end_time == None).order_by(StaffShift.start_time.desc()).first()
+    is_admin = False
+    if shift:
+        if shift.staff_role.lower() == "admin":
+            is_admin = True
+        active_user = shift.staff_name
+    else:
+        if current_user.role == "admin":
+            is_admin = True
+        active_user = current_user.name
+
+    if not is_admin:
+        body.pharmacist = active_user
     if not body.from_date or not body.to_date:
         raise HTTPException(
             status_code=400,
